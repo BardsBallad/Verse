@@ -5,7 +5,7 @@
 import * as monaco from 'monaco-editor';
 import VerseScriptCompiler, { Type, CompileResult } from '../compiler';
 
-interface CompletionContext {
+export interface CompletionContext {
   types: Map<string, Type>;
   currentScope: string[];
 }
@@ -366,8 +366,8 @@ export class TTRPGScriptLanguageService {
           if (!word) return null;
           
           // Try to get type info for the identifier
-          const lineContent = model.getLineContent(position.lineNumber);
-          const beforeWord = lineContent.slice(0, word.startColumn - 1);
+          // const lineContent = model.getLineContent(position.lineNumber);
+          // const beforeWord = lineContent.slice(0, word.startColumn - 1);
           
           // Check if this is a variable we can infer
           try {

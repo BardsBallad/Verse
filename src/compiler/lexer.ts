@@ -90,7 +90,7 @@ export default class Lexer {
   private nextToken(): Token | null {
     const start = this.pos;
     const startColumn = this.column;
-    const char = this.source[this.pos];
+    const char = this.source[start];
     
     // Single character tokens
     const singleChar: Record<string, TokenType> = {

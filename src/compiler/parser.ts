@@ -145,7 +145,7 @@ export default class Parser {
   }
   
   private conditional(): ASTNode {
-    let expr = this.logicalOr();
+    const expr = this.logicalOr();
     
     if (this.match(TokenType.QUESTION)) {
       const consequent = this.expression();

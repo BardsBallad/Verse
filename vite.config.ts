@@ -3,7 +3,7 @@ import path from 'path';
 
 export default defineConfig({
   root: 'playground',
-  base: '/ttrpg-script-lang/',
+  base: '/verse/',
   build: {
     outDir: '../dist-playground',
     emptyOutDir: true,

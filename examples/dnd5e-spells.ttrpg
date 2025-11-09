@@ -1,0 +1,46 @@
+// D&D 5e Spell Management Example
+
+// Get all spells available for a given spell slot level
+fn getAvailableSpells(casting, slotLevel) {
+  const availableSlot = casting.slots.find(s => s.level == slotLevel)
+  
+  if availableSlot == null || availableSlot.current <= 0 {
+    return []
+  }
+  
+  return casting.spells.filter(s => s.level == slotLevel)
+}
+
+// Calculate total spell slots remaining
+fn getTotalSlotsRemaining(casting) {
+  let total = 0
+  
+  for slot in casting.slots {
+    total = total + slot.current
+  }
+  
+  return total
+}
+
+// Get highest level spell available
+fn getHighestSpellLevel(casting) {
+  let maxLevel = 0
+  
+  for spell in casting.spells {
+    if spell.level > maxLevel {
+      maxLevel = spell.level
+    }
+  }
+  
+  return maxLevel
+}
+
+// Main: Get all damage spells with available slots
+const damageSpells = casting.spells.filter(s => {
+  const hasSlots = casting.slots.find(slot => 
+    slot.level == s.level && slot.current > 0
+  )
+  return s.damage != "" && hasSlots != null
+})
+
+return damageSpells

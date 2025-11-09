@@ -16,27 +16,27 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+      - uses: oven-sh/setup-bun@v2
       
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: bun install
       
       - name: Run linter
-        run: npm run lint
+        run: bun run lint
       
       - name: Run type check
-        run: npm run typecheck
+        run: bun run typecheck
       
       - name: Run tests
-        run: npm test
+        run: bun test
       
       - name: Build
-        run: npm run build
+        run: bun run build
 
   playground:
     runs-on: ubuntu-latest
@@ -45,18 +45,18 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+      - uses: oven-sh/setup-bun@v2
       
       - name: Use Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20.x'
-          cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: bun install
       
       - name: Build playground
-        run: npm run playground:build
+        run: bun run playground:build
       
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

@@ -29,7 +29,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "playground:dev": "vite playground --open",
-    "playground:build": "vite build playground",
+    "playground:build": "vite build playground --base /verse",
     "playground:preview": "vite preview playground",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",

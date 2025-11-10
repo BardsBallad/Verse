@@ -28,9 +28,9 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
-    "playground:dev": "vite playground --open",
-    "playground:build": "vite build playground --base /Verse",
-    "playground:preview": "vite preview playground",
+    "playground:dev": "vite playground --open --config ./vite.config.ts",
+    "playground:build": "vite build playground --config ./vite.config.ts",
+    "playground:preview": "vite preview playground --config ./vite.config.ts",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
@@ -71,8 +71,9 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
-    "monaco-editor": "^0.45.0",
-    "quickjs-emscripten": "^0.31.0"
+    "monaco-editor": "^0.54.0",
+    "quickjs-emscripten": "^0.31.0",
+    "vite-plugin-monaco-editor": "^1.1.0"
   },
   "peerDependencies": {
     "monaco-editor": "^0.45.0"

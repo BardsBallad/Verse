@@ -2,6 +2,8 @@
 // playground/main.ts
 // ============================================================================
 import * as monaco from 'monaco-editor';
+// @ts-expect-error this file does exist.
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import { BUILTIN_TYPES } from '../src/index';
 import VerseScriptCompiler from '../src/compiler';
 
@@ -10,33 +12,8 @@ import { load } from './quick';
 
 // Setup Monaco workers
 self.MonacoEnvironment = {
-  getWorker(workerId: string, label: string) {
-    const getWorkerModule = (moduleUrl: string, label: string) => {
-      const url = self.MonacoEnvironment?.getWorkerUrl?.(moduleUrl, label) ?? moduleUrl
-
-			return new Worker(url, {
-				name: label,
-				type: 'module'
-			});
-		};
-
-		switch (label) {
-			case 'json':
-				return getWorkerModule('/monaco-editor/esm/vs/language/json/json.worker?worker', label);
-			case 'css':
-			case 'scss':
-			case 'less':
-				return getWorkerModule('/monaco-editor/esm/vs/language/css/css.worker?worker', label);
-			case 'html':
-			case 'handlebars':
-			case 'razor':
-				return getWorkerModule('/monaco-editor/esm/vs/language/html/html.worker?worker', label);
-			case 'typescript':
-			case 'javascript':
-				return getWorkerModule('/monaco-editor/esm/vs/language/typescript/ts.worker?worker', label);
-			default:
-				return getWorkerModule('/monaco-editor/esm/vs/editor/editor.worker?worker', label);
-		}
+  getWorker() {
+    return new editorWorker()
   },
 };
 
@@ -216,56 +193,327 @@ monaco.languages.register({ id: 'verse' });
 
 // Set syntax highlighting
 monaco.languages.setMonarchTokensProvider('verse', {
+  // Set defaultToken to invalid to see what you do not tokenize yet
+  defaultToken: 'invalid',
+  
   keywords: [
-    'let', 'const', 'if', 'else', 'for', 'in', 'return', 'fn', 
-    'type', 'interface', 'true', 'false', 'null'
+    'if', 'else', 'while', 'function', 'fn', 'return', 'let', 'const',
+    'for', 'break', 'continue', 'true', 'false', 'null'
   ],
+  
   typeKeywords: [
-    'number', 'string', 'boolean', 'null'
+    'number', 'string', 'bool', 'array', 'interface', 'void'
   ],
+  
   operators: [
-    '=', '>', '<', '!', '==', '<=', '>=', '!=',
-    '&&', '||', '+', '-', '*', '/', '%', '=>', '?', ':', '|'
+    '=', '>', '<', '!', '~', '?', ':', '==', '<=', '>=', '!=',
+    '&&', '||', '++', '--', '+', '-', '*', '/', '&', '|', '^', '%',
+    '<<', '>>', '>>>', '+=', '-=', '*=', '/=', '&=', '|=', '^=',
+    '%='
   ],
+  
+  // Common regular expressions
   symbols: /[=><!~?:&|+\-*/^%]+/,
+  escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+  
+  // The main tokenizer
   tokenizer: {
     root: [
-      [/[a-zA-Z_]\w*/, {
+      // Identifiers and keywords
+      [/[a-z_$][\w$]*/, {
         cases: {
-          '@typeKeywords': 'type.identifier',
+          '@typeKeywords': 'type',
           '@keywords': 'keyword',
           '@default': 'identifier'
         }
       }],
-      [/[0-9]+(\.[0-9]+)?/, 'number'],
-      [/"([^"\\]|\\.)*$/, 'string.invalid'],
-      [/"/, 'string', '@string'],
-      [/'([^'\\]|\\.)*$/, 'string.invalid'],
-      [/'/, 'string', '@string_single'],
+      
+      [/[A-Z][\w$]*/, 'type.identifier'], // Type names (PascalCase)
+      
+      // Whitespace
+      { include: '@whitespace' },
+      
+      // Delimiters and operators
+      [/[{}()[\]]/, '@brackets'],
+      [/[<>](?!@symbols)/, '@brackets'],
       [/@symbols/, {
         cases: {
           '@operators': 'operator',
           '@default': ''
         }
       }],
-      [/\/\/.*$/, 'comment'],
+      
+      // Numbers
+      [/\d*\.\d+([eE][-+]?\d+)?/, 'number.float'],
+      [/0[xX][0-9a-fA-F]+/, 'number.hex'],
+      [/\d+/, 'number'],
+      
+      // Delimiter: after number because of .\d floats
+      [/[;,.]/, 'delimiter'],
+      
+      // Strings
+      [/"([^"\\]|\\.)*$/, 'string.invalid'], // non-teminated string
+      [/"/, { token: 'string.quote', bracket: '@open', next: '@string' }],
+      
+      // Characters
+      [/'[^\\']'/, 'string'],
+      [/(')(@escapes)(')/, ['string', 'string.escape', 'string']],
+      [/'/, 'string.invalid']
     ],
+    
+    comment: [
+      [/[^/*]+/, 'comment'],
+      [/\/\*/, 'comment', '@push'],
+      ["\\*/", 'comment', '@pop'],
+      [/[/*]/, 'comment']
+    ],
+    
     string: [
       [/[^\\"]+/, 'string'],
-      [/"/, 'string', '@pop']
+      [/@escapes/, 'string.escape'],
+      [/\\./, 'string.escape.invalid'],
+      [/"/, { token: 'string.quote', bracket: '@close', next: '@pop' }]
     ],
-    string_single: [
-      [/[^\\']+/, 'string'],
-      [/'/, 'string', '@pop']
+    
+    whitespace: [
+      [/[ \t\r\n]+/, 'white'],
+      [/\/\/.*$/, 'comment'],
     ],
+  },
+});
+
+// Define language configuration
+monaco.languages.setLanguageConfiguration('verse', {
+  comments: {
+    lineComment: '//',
+  },
+  brackets: [
+    ['{', '}'],
+    ['[', ']'],
+    ['(', ')']
+  ],
+  autoClosingPairs: [
+    { open: '{', close: '}' },
+    { open: '[', close: ']' },
+    { open: '(', close: ')' },
+    { open: '"', close: '"' },
+    { open: "'", close: "'" },
+  ],
+  surroundingPairs: [
+    { open: '{', close: '}' },
+    { open: '[', close: ']' },
+    { open: '(', close: ')' },
+    { open: '"', close: '"' },
+    { open: "'", close: "'" },
+  ],
+  folding: {
+    markers: {
+      start: new RegExp('^\\s*//\\s*#?region\\b'),
+      end: new RegExp('^\\s*//\\s*#?endregion\\b')
+    }
+  }
+});
+
+// Register autocomplete provider
+monaco.languages.registerCompletionItemProvider('verse', {
+  provideCompletionItems: (model, position) => {
+    const word = model.getWordUntilPosition(position);
+    const range = {
+      startLineNumber: position.lineNumber,
+      endLineNumber: position.lineNumber,
+      startColumn: word.startColumn,
+      endColumn: word.endColumn
+    };
+    
+    const suggestions = [
+      // Keywords
+      {
+        label: 'fn',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'fn ${1:functionName}(${2:params}) -> ${3:ReturnType} {\n\t$0\n}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        documentation: 'Define a function',
+        range: range
+      },
+      {
+        label: 'if',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'if (${1:condition}) {\n\t$0\n}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        documentation: 'If statement',
+        range: range
+      },
+      {
+        label: 'else',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'else {\n\t$0\n}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        documentation: 'Else statement',
+        range: range
+      },
+      {
+        label: 'while',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'while (${1:condition}) {\n\t$0\n}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        documentation: 'While loop',
+        range: range
+      },
+      {
+        label: 'const',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'const ${1:name}: ${2:type} = ${3:value}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        documentation: 'Constant declaration',
+        range: range
+      },
+      {
+        label: 'let',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'let ${1:name}: ${2:type} = ${3:value}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        documentation: 'Variable declaration',
+        range: range
+      },
+      {
+        label: 'return',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'return ${1:value}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        documentation: 'Return statement',
+        range: range
+      },
+      // Types
+      {
+        label: 'string',
+        kind: monaco.languages.CompletionItemKind.TypeParameter,
+        insertText: 'string',
+        documentation: 'String type',
+        range: range
+      },
+      {
+        label: 'number',
+        kind: monaco.languages.CompletionItemKind.TypeParameter,
+        insertText: 'number',
+        documentation: 'Number type',
+        range: range
+      },
+      {
+        label: 'bool',
+        kind: monaco.languages.CompletionItemKind.TypeParameter,
+        insertText: 'bool',
+        documentation: 'Boolean type',
+        range: range
+      },
+      {
+        label: 'array',
+        kind: monaco.languages.CompletionItemKind.TypeParameter,
+        insertText: 'array',
+        documentation: 'Array type',
+        range: range
+      },
+      {
+        label: 'null',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'null',
+        documentation: 'Null value',
+        range: range
+      },
+      {
+        label: 'interface',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'interface ${1:Name} {\n\t$0\n}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        documentation: 'Interface definition',
+        range: range
+      },
+      // Common patterns
+      {
+        label: 'true',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'true',
+        documentation: 'Boolean true',
+        range: range
+      },
+      {
+        label: 'false',
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: 'false',
+        documentation: 'Boolean false',
+        range: range
+      },
+    ];
+    
+    return { suggestions: suggestions };
+  }
+});
+
+// Register hover provider for documentation
+monaco.languages.registerHoverProvider('verse', {
+  provideHover: (model, position) => {
+    const word = model.getWordAtPosition(position);
+    if (!word) return null;
+    
+    const hoverDocs: Record<string, string> = {
+      'fn': 'Define a function with optional parameters and return type',
+      'if': 'Conditional statement',
+      'else': 'Alternative branch for if statement',
+      'while': 'Loop while condition is true',
+      'const': 'Declare a constant (immutable) variable',
+      'let': 'Declare a mutable variable',
+      'return': 'Return a value from a function',
+      'string': 'Text data type',
+      'number': 'Numeric data type',
+      'bool': 'Boolean data type (true/false)',
+      'array': 'Collection data type',
+      'null': 'Represents absence of value',
+      'interface': 'Define a structural type',
+    };
+    
+    const doc = hoverDocs[word.word];
+    if (doc) {
+      return {
+        range: new monaco.Range(
+          position.lineNumber,
+          word.startColumn,
+          position.lineNumber,
+          word.endColumn
+        ),
+        contents: [
+          { value: `**${word.word}**` },
+          { value: doc }
+        ]
+      };
+    }
+    
+    return null;
+  }
+});
+
+// Optional: Define a custom theme for Verse
+monaco.editor.defineTheme('verse-dark', {
+  base: 'vs-dark',
+  inherit: true,
+  rules: [
+    { token: 'keyword', foreground: 'C586C0', fontStyle: 'bold' },
+    { token: 'type', foreground: '4EC9B0' },
+    { token: 'type.identifier', foreground: '4EC9B0' },
+    { token: 'identifier', foreground: '9CDCFE' },
+    { token: 'string', foreground: 'CE9178' },
+    { token: 'number', foreground: 'B5CEA8' },
+    { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
+    { token: 'operator', foreground: 'D4D4D4' },
+  ],
+  colors: {
+    'editor.background': '#1E1E1E',
   }
 });
 
 // Create editor
 const editor = monaco.editor.create(document.getElementById('editor')!, {
   value: examples[0].code,
-  language: 'ttrpgscript',
-  theme: 'vs-dark',
+  language: 'verse',
+  theme: 'verse-dark',
   automaticLayout: true,
   fontSize: 14,
   minimap: { enabled: false },

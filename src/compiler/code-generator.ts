@@ -9,18 +9,18 @@ import TypeChecker, { Type } from "./type-checker";
 
 export default class CodeGenerator {
   generate(ast: ProgramNode): string {
-    return ast.body.map(stmt => this.generateStatement(stmt)).join('\n');
+    return ast.body.map(stmt => this.generateStatement(stmt)).filter(line => line !== '').join('\n');
   }
   
   private generateStatement(node: ASTNode): string {
     switch (node.type) {
       case 'TypeDeclaration':
         // Type declarations don't generate runtime code
-        return `// type ${node.name} = ...`;
+        return ``;
       
       case 'InterfaceDeclaration':
         // Interface declarations don't generate runtime code
-        return `// interface ${node.name} { ... }`;
+        return ``;
       
       case 'VariableDeclaration':
         const keyword = node.constant ? 'const' : 'let';

@@ -51,7 +51,8 @@ export enum TokenType {
   COMMA = 'COMMA',
   DOT = 'DOT',
   COLON = 'COLON',
-  ARROW = 'ARROW',
+  RETURN_ARROW = 'RETURN_ARROW',
+  FAT_ARROW = 'FAT_ARROW',
   PIPE = 'PIPE',
   
   // Special
@@ -127,7 +128,7 @@ export default class Lexer {
       }
       if (this.peek() === '>') {
         this.advance();
-        return { type: TokenType.ARROW, value: '=>', line: this.line, column: startColumn };
+        return { type: TokenType.FAT_ARROW, value: '=>', line: this.line, column: startColumn };
       }
       return { type: TokenType.EQUALS, value: '=', line: this.line, column: startColumn };
     }
@@ -181,6 +182,10 @@ export default class Lexer {
       this.advance();
       if (this.isDigit(this.peek())) {
         return this.scanNumber(true);
+      }
+      if (this.peek() === '>') {
+        this.advance();
+        return { type: TokenType.RETURN_ARROW, value: '->', line: this.line, column: startColumn };
       }
       return { type: TokenType.MINUS, value: '-', line: this.line, column: startColumn };
     }

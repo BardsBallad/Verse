@@ -54,13 +54,8 @@ export default class TypeChecker {
   }
   
   inferReturnType(ast: ProgramNode): Type {
-    // First pass: collect all variable declarations to build symbol table
-    for (const statement of ast.body) {
-      if (statement.type === 'VariableDeclaration') {
-        const valueType = this.inferExpression(statement.value);
-        this.symbolTable.set(statement.identifier, valueType);
-      }
-    }
+    // This will populate the symbol table with all variables and functions
+    this.check(ast)
     
     const returnTypes: Type[] = [];
     
@@ -74,8 +69,6 @@ export default class TypeChecker {
           collectReturns(node.consequent);
           if (node.alternate) collectReturns(node.alternate);
         } else if (node.type === 'ForStatement') {
-          collectReturns(node.body);
-        } else if (node.type === 'FunctionDeclaration') {
           collectReturns(node.body);
         }
       }

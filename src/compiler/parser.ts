@@ -28,8 +28,6 @@ export default class Parser {
   // ============================================================================
   
   private statement(): ASTNode {
-    console.log(this.peek().type)
-
     if (this.match(TokenType.TYPE)) {
       return this.typeDeclaration();
     }
@@ -127,7 +125,7 @@ export default class Parser {
     
     // Optional return type: fn add() -> number
     let returnTypeAnnotation: TypeAnnotation | undefined;
-    if (this.match(TokenType.ARROW)) {
+    if (this.match(TokenType.RETURN_ARROW)) {
       returnTypeAnnotation = this.parseTypeAnnotation();
     }
     
@@ -467,7 +465,7 @@ export default class Parser {
       const name = this.previous().value;
       
       // Arrow function: x => expr
-      if (this.match(TokenType.ARROW)) {
+      if (this.match(TokenType.FAT_ARROW)) {
         const body = this.expression();
         return { type: 'ArrowFunction', params: [name], body };
       }
@@ -491,7 +489,7 @@ export default class Parser {
         }
       }
       
-      if (this.match(TokenType.RPAREN) && this.match(TokenType.ARROW)) {
+      if (this.match(TokenType.RPAREN) && this.match(TokenType.FAT_ARROW)) {
         const body = this.expression();
         return { type: 'ArrowFunction', params, body };
       }

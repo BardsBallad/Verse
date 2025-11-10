@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: 'playground',
-  base: '/verse/',
+  base: '/Verse',
   build: {
     outDir: '../dist-playground',
     emptyOutDir: true,

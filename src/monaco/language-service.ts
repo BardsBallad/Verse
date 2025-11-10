@@ -3,7 +3,7 @@
 // ============================================================================
 
 import * as monaco from 'monaco-editor';
-import VerseScriptCompiler, { Type, CompileResult } from '../compiler';
+import VerseScriptCompiler, { Type } from '../compiler';
 
 export interface CompletionContext {
   types: Map<string, Type>;
@@ -23,7 +23,7 @@ export class TTRPGScriptLanguageService {
    */
   register() {
     // Register language
-    monaco.languages.register({ id: 'ttrpgscript' });
+    monaco.languages.register({ id: 'verse' });
     
     // Set up syntax highlighting
     this.registerTokensProvider();
@@ -49,10 +49,10 @@ export class TTRPGScriptLanguageService {
    */
   private registerTokensProvider() {
     this.disposables.push(
-      monaco.languages.setMonarchTokensProvider('ttrpgscript', {
+      monaco.languages.setMonarchTokensProvider('verse', {
         keywords: [
           'let', 'const', 'if', 'else', 'for', 'in', 'return', 'fn', 
-          'true', 'false', 'null'
+          'type', 'interface', 'true', 'false', 'null'
         ],
         
         typeKeywords: [
@@ -64,7 +64,7 @@ export class TTRPGScriptLanguageService {
           '&&', '||', '+', '-', '*', '/', '%', '=>', '?', ':'
         ],
         
-        symbols: /[=><!~?:&|+\-*\/\^%]+/,
+        symbols: /[=><!~?:&|+\-*/^%]+/,
         
         tokenizer: {
           root: [
@@ -98,7 +98,7 @@ export class TTRPGScriptLanguageService {
             [/\/\/.*$/, 'comment'],
             
             // Delimiters
-            [/[{}()\[\]]/, '@brackets'],
+            [/[{}()[\]]/, '@brackets'],
             [/[,.]/, 'delimiter'],
           ],
           
@@ -123,7 +123,7 @@ export class TTRPGScriptLanguageService {
    */
   private registerCompletionProvider() {
     this.disposables.push(
-      monaco.languages.registerCompletionItemProvider('ttrpgscript', {
+      monaco.languages.registerCompletionItemProvider('verse', {
         triggerCharacters: ['.'],
         
         provideCompletionItems: (model, position) => {
@@ -336,7 +336,7 @@ export class TTRPGScriptLanguageService {
     };
     
     // Extract type name (handle arrays)
-    let baseType = typeStr.replace('[]', '');
+    const baseType = typeStr.replace('[]', '');
     
     if (typeMap[baseType]) {
       return typeMap[baseType];
@@ -366,8 +366,9 @@ export class TTRPGScriptLanguageService {
           if (!word) return null;
           
           // Try to get type info for the identifier
-          // const lineContent = model.getLineContent(position.lineNumber);
-          // const beforeWord = lineContent.slice(0, word.startColumn - 1);
+          const lineContent = model.getLineContent(position.lineNumber);
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const beforeWord = lineContent.slice(0, word.startColumn - 1);
           
           // Check if this is a variable we can infer
           try {
@@ -442,7 +443,7 @@ export class TTRPGScriptLanguageService {
   /**
    * Get compilation result for current code
    */
-  compile(code: string): CompileResult {
+  compile(code: string) {
     return this.compiler.compile(code);
   }
 }
@@ -489,10 +490,10 @@ export function createTTRPGScriptEditor(
 // ============================================================================
 
 /*
-import { createTTRPGScriptEditor, VerseScriptCompiler } from './monaco-integration';
+import { createTTRPGScriptEditor, TTRPGScriptCompiler } from './monaco-integration';
 
 // Define your types
-const SpellType = VerseScriptCompiler.createObjectType('Spell', {
+const SpellType = TTRPGScriptCompiler.createObjectType('Spell', {
   name: BUILTIN_TYPES.string,
   level: BUILTIN_TYPES.number,
   damage: BUILTIN_TYPES.string,

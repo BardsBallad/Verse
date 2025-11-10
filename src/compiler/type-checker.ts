@@ -1,142 +1,8 @@
 // ============================================================================
-// AST - Abstract Syntax Tree Node Types
-// ============================================================================
-
-export type ASTNode = 
-  | ProgramNode
-  | VariableDeclarationNode
-  | FunctionDeclarationNode
-  | ReturnStatementNode
-  | IfStatementNode
-  | ForStatementNode
-  | ExpressionStatementNode
-  | BinaryExpressionNode
-  | UnaryExpressionNode
-  | CallExpressionNode
-  | MemberExpressionNode
-  | ArrayExpressionNode
-  | ObjectExpressionNode
-  | IdentifierNode
-  | LiteralNode
-  | ConditionalExpressionNode
-  | ArrowFunctionNode
-  | AssignmentExpressionNode;
-
-export interface BaseNode {
-  type: string;
-}
-
-export interface ProgramNode extends BaseNode {
-  type: 'Program';
-  body: ASTNode[];
-}
-
-export interface VariableDeclarationNode extends BaseNode {
-  type: 'VariableDeclaration';
-  identifier: string;
-  value: ASTNode;
-  constant: boolean;
-}
-
-export interface FunctionDeclarationNode extends BaseNode {
-  type: 'FunctionDeclaration';
-  name: string;
-  params: string[];
-  body: ASTNode[];
-}
-
-export interface ReturnStatementNode extends BaseNode {
-  type: 'ReturnStatement';
-  value: ASTNode | null;
-}
-
-export interface IfStatementNode extends BaseNode {
-  type: 'IfStatement';
-  condition: ASTNode;
-  consequent: ASTNode[];
-  alternate: ASTNode[] | null;
-}
-
-export interface ForStatementNode extends BaseNode {
-  type: 'ForStatement';
-  variable: string;
-  iterable: ASTNode;
-  body: ASTNode[];
-}
-
-export interface ExpressionStatementNode extends BaseNode {
-  type: 'ExpressionStatement';
-  expression: ASTNode;
-}
-
-export interface BinaryExpressionNode extends BaseNode {
-  type: 'BinaryExpression';
-  operator: string;
-  left: ASTNode;
-  right: ASTNode;
-}
-
-export interface UnaryExpressionNode extends BaseNode {
-  type: 'UnaryExpression';
-  operator: string;
-  operand: ASTNode;
-}
-
-export interface CallExpressionNode extends BaseNode {
-  type: 'CallExpression';
-  callee: ASTNode;
-  arguments: ASTNode[];
-}
-
-export interface MemberExpressionNode extends BaseNode {
-  type: 'MemberExpression';
-  object: ASTNode;
-  property: string;
-  computed: boolean;
-}
-
-export interface ArrayExpressionNode extends BaseNode {
-  type: 'ArrayExpression';
-  elements: ASTNode[];
-}
-
-export interface ObjectExpressionNode extends BaseNode {
-  type: 'ObjectExpression';
-  properties: { key: string; value: ASTNode }[];
-}
-
-export interface IdentifierNode extends BaseNode {
-  type: 'Identifier';
-  name: string;
-}
-
-export interface LiteralNode extends BaseNode {
-  type: 'Literal';
-  value: number | string | boolean | null;
-}
-
-export interface ConditionalExpressionNode extends BaseNode {
-  type: 'ConditionalExpression';
-  test: ASTNode;
-  consequent: ASTNode;
-  alternate: ASTNode;
-}
-
-export interface ArrowFunctionNode extends BaseNode {
-  type: 'ArrowFunction';
-  params: string[];
-  body: ASTNode;
-}
-
-export interface AssignmentExpressionNode extends BaseNode {
-  type: 'AssignmentExpression';
-  target: ASTNode;
-  value: ASTNode;
-}
-
-// ============================================================================
 // TYPE SYSTEM
 // ============================================================================
+
+import { ProgramNode, ASTNode, VariableDeclarationNode, FunctionDeclarationNode, IfStatementNode, ForStatementNode, LiteralNode, IdentifierNode, BinaryExpressionNode, UnaryExpressionNode, CallExpressionNode, MemberExpressionNode, ArrayExpressionNode, ObjectExpressionNode, ConditionalExpressionNode, ArrowFunctionNode, InterfaceDeclarationNode, TypeAnnotation, TypeDeclarationNode } from "./ast";
 
 export interface Type {
   kind: 'primitive' | 'array' | 'object' | 'function' | 'union' | 'unknown';
@@ -231,6 +97,10 @@ export default class TypeChecker {
   
   private checkStatement(node: ASTNode): Type {
     switch (node.type) {
+      case 'TypeDeclaration':
+        return this.checkTypeDeclaration(node);
+      case 'InterfaceDeclaration':
+        return this.checkInterfaceDeclaration(node);
       case 'VariableDeclaration':
         return this.checkVariableDeclaration(node);
       case 'FunctionDeclaration':
@@ -248,8 +118,71 @@ export default class TypeChecker {
     }
   }
   
+  private checkTypeDeclaration(node: TypeDeclarationNode): Type {
+    const type = this.annotationToType(node.typeAnnotation);
+    this.customTypes.set(node.name, type);
+    return type;
+  }
+  
+  private checkInterfaceDeclaration(node: InterfaceDeclarationNode): Type {
+    const properties: Record<string, Type> = {};
+    
+    for (const prop of node.properties) {
+      properties[prop.key] = this.annotationToType(prop.typeAnnotation);
+    }
+    
+    const type: Type = { kind: 'object', name: node.name, properties };
+    this.customTypes.set(node.name, type);
+    return type;
+  }
+  
+  private annotationToType(annotation: TypeAnnotation): Type {
+    switch (annotation.type) {
+      case 'PrimitiveType':
+        return BUILTIN_TYPES[annotation.name];
+      
+      case 'ArrayType':
+        return {
+          kind: 'array',
+          elementType: this.annotationToType(annotation.elementType)
+        };
+      
+      case 'ObjectType':
+        const properties: Record<string, Type> = {};
+        for (const prop of annotation.properties) {
+          properties[prop.key] = this.annotationToType(prop.valueType);
+        }
+        return { kind: 'object', properties };
+      
+      case 'UnionType':
+        return {
+          kind: 'union',
+          types: annotation.types.map(t => this.annotationToType(t))
+        };
+      
+      case 'TypeReference':
+        return this.customTypes.get(annotation.name) || BUILTIN_TYPES.unknown;
+      
+      default:
+        return BUILTIN_TYPES.unknown;
+    }
+  }
+  
   private checkVariableDeclaration(node: VariableDeclarationNode): Type {
     const valueType = this.inferExpression(node.value);
+    
+    // If type annotation exists, check compatibility
+    if (node.typeAnnotation) {
+      const declaredType = this.annotationToType(node.typeAnnotation);
+      if (!this.isAssignable(valueType, declaredType)) {
+        throw new TypeError(
+          `Cannot assign ${this.typeToString(valueType)} to ${this.typeToString(declaredType)}`
+        );
+      }
+      this.symbolTable.set(node.identifier, declaredType);
+      return declaredType;
+    }
+    
     this.symbolTable.set(node.identifier, valueType);
     return valueType;
   }
@@ -258,9 +191,15 @@ export default class TypeChecker {
     // Create new scope for function
     const savedSymbols = new Map(this.symbolTable);
     
-    // Add parameters to scope (unknown type for now)
+    // Add parameters to scope with their types
+    const paramTypes: Type[] = [];
     for (const param of node.params) {
-      this.symbolTable.set(param, BUILTIN_TYPES.unknown);
+      const paramType = param.typeAnnotation 
+        ? this.annotationToType(param.typeAnnotation)
+        : BUILTIN_TYPES.unknown;
+      
+      this.symbolTable.set(param.name, paramType);
+      paramTypes.push(paramType);
     }
     
     // Infer return type from function body
@@ -271,21 +210,68 @@ export default class TypeChecker {
       }
     }
     
-    const returnType = returnTypes.length > 0 
+    const inferredReturnType = returnTypes.length > 0 
       ? (returnTypes.length === 1 ? returnTypes[0] : { kind: 'union' as const, types: returnTypes })
       : BUILTIN_TYPES.unknown;
+    
+    // If return type annotation exists, check compatibility
+    let returnType = inferredReturnType;
+    if (node.returnTypeAnnotation) {
+      const declaredReturnType = this.annotationToType(node.returnTypeAnnotation);
+      if (!this.isAssignable(inferredReturnType, declaredReturnType)) {
+        throw new TypeError(
+          `Function ${node.name} returns ${this.typeToString(inferredReturnType)} but declared ${this.typeToString(declaredReturnType)}`
+        );
+      }
+      returnType = declaredReturnType;
+    }
     
     // Restore scope
     this.symbolTable = savedSymbols;
     
     const funcType: Type = {
       kind: 'function',
-      parameters: node.params.map(() => BUILTIN_TYPES.unknown),
+      parameters: paramTypes,
       returnType,
     };
     
     this.symbolTable.set(node.name, funcType);
     return funcType;
+  }
+  
+  private isAssignable(source: Type, target: Type): boolean {
+    // Same type
+    if (this.typesEqual(source, target)) {
+      return true;
+    }
+    
+    // Unknown is assignable to anything
+    if (source.kind === 'unknown' || target.kind === 'unknown') {
+      return true;
+    }
+    
+    // Union type checking
+    if (target.kind === 'union') {
+      return target.types!.some(t => this.isAssignable(source, t));
+    }
+    
+    // Array covariance
+    if (source.kind === 'array' && target.kind === 'array') {
+      return this.isAssignable(source.elementType!, target.elementType!);
+    }
+    
+    // Structural typing for objects
+    if (target.kind === 'object' && source.kind === 'object') {
+      for (const [key, targetProp] of Object.entries(target.properties || {})) {
+        const sourceProp = source.properties?.[key];
+        if (!sourceProp || !this.isAssignable(sourceProp, targetProp)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    
+    return false;
   }
   
   private checkIfStatement(node: IfStatementNode): Type {
@@ -373,7 +359,12 @@ export default class TypeChecker {
   }
   
   private inferIdentifier(node: IdentifierNode): Type {
-    return this.symbolTable.get(node.name) || BUILTIN_TYPES.unknown;
+    let type = this.symbolTable.get(node.name)
+
+    if (!type || type.kind === 'unknown') type = this.customTypes.get(node.name)
+    if (!type) type = BUILTIN_TYPES.unknown
+
+    return type
   }
   
   private inferBinaryExpression(node: BinaryExpressionNode): Type {

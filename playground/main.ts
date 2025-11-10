@@ -2,21 +2,23 @@
 // playground/main.ts
 // ============================================================================
 import * as monaco from 'monaco-editor';
-// import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import { BUILTIN_TYPES } from '../src/index';
 import VerseScriptCompiler from '../src/compiler';
+
+import { Scope } from 'quickjs-emscripten'
+import { load } from './quick';
 
 // Setup Monaco workers
 self.MonacoEnvironment = {
   getWorker(workerId: string, label: string) {
     const getWorkerModule = (moduleUrl: string, label: string) => {
-      const workerUrl = self.MonacoEnvironment?.getWorkerUrl?.(moduleUrl, label) ?? moduleUrl;
-      
-      return new Worker(workerUrl, {
-        name: label,
-        type: 'module'
-      });
-    };
+      const url = self.MonacoEnvironment?.getWorkerUrl?.(moduleUrl, label) ?? moduleUrl
+
+			return new Worker(url, {
+				name: label,
+				type: 'module'
+			});
+		};
 
 		switch (label) {
 			case 'json':
@@ -93,6 +95,54 @@ const sampleContext = {
 // Example scripts
 const examples = [
   {
+    title: "Type Declarations",
+    desc: "Define custom types and interfaces",
+    code: `// Define custom types
+type SpellLevel = number
+type DamageType = string | null
+
+interface Spell {
+  name: string,
+  level: SpellLevel,
+  damage: DamageType
+}
+
+// Use the types
+const spell: Spell = casting.spells[0]
+return spell`
+  },
+  {
+    title: "Typed Variables",
+    desc: "Variables with explicit type annotations",
+    code: `// Variable with type annotation
+const level: number = 2
+const filtered: Spell[] = casting.spells.filter(s => s.level <= level)
+return filtered`
+  },
+  {
+    title: "Typed Functions",
+    desc: "Functions with parameter and return types",
+    code: `// Function with type annotations
+fn getSpellsAtLevel(level: number) -> Spell[] {
+  const spells: Spell[] = casting.spells.filter(s => s.level == level)
+  return spells
+}
+
+return getSpellsAtLevel(2)`
+  },
+  {
+    title: "Union Types",
+    desc: "Handle multiple possible types",
+    code: `// Function with union return type
+fn findSpell(name: string) -> Spell | null {
+  const found: Spell | null = casting.spells.find(s => s.name == name)
+  return found
+}
+
+const result: Spell | null = findSpell("Fireball")
+return result`
+  },
+  {
     title: "Filter Spells by Level",
     desc: "Returns spells at or below level 2",
     code: `// Filter spells by level
@@ -116,17 +166,6 @@ if slot.current <= 0 {
 
 const available = casting.spells.filter(s => s.level == slot.level)
 return available`
-  },
-  {
-    title: "Function with Inference",
-    desc: "Define function with automatic return type",
-    code: `// Function to get spells for a level
-fn getSpellsForLevel(level) {
-  const spells = casting.spells.filter(s => s.level <= level)
-  return spells
-}
-
-return getSpellsForLevel(2)`
   },
   {
     title: "HP Calculation",
@@ -170,23 +209,30 @@ const compiler = new VerseScriptCompiler({
   slot: SpellSlotType,
 });
 
+compiler.registerType('spell', SpellType)
+
 // Register custom language
 monaco.languages.register({ id: 'verse' });
 
 // Set syntax highlighting
 monaco.languages.setMonarchTokensProvider('verse', {
   keywords: [
-    'let', 'const', 'if', 'else', 'for', 'in', 'return', 'fn', 'true', 'false', 'null'
+    'let', 'const', 'if', 'else', 'for', 'in', 'return', 'fn', 
+    'type', 'interface', 'true', 'false', 'null'
+  ],
+  typeKeywords: [
+    'number', 'string', 'boolean', 'null'
   ],
   operators: [
     '=', '>', '<', '!', '==', '<=', '>=', '!=',
-    '&&', '||', '+', '-', '*', '/', '%', '=>', '?', ':'
+    '&&', '||', '+', '-', '*', '/', '%', '=>', '?', ':', '|'
   ],
-  symbols: /[=><!~?:&|+\-*\/\^%]+/,
+  symbols: /[=><!~?:&|+\-*/^%]+/,
   tokenizer: {
     root: [
       [/[a-zA-Z_]\w*/, {
         cases: {
+          '@typeKeywords': 'type.identifier',
           '@keywords': 'keyword',
           '@default': 'identifier'
         }
@@ -218,7 +264,7 @@ monaco.languages.setMonarchTokensProvider('verse', {
 // Create editor
 const editor = monaco.editor.create(document.getElementById('editor')!, {
   value: examples[0].code,
-  language: 'verse',
+  language: 'ttrpgscript',
   theme: 'vs-dark',
   automaticLayout: true,
   fontSize: 14,
@@ -273,36 +319,51 @@ function compileAndAnalyze() {
   }
 }
 
+
 // Run button
-document.getElementById('runBtn')!.addEventListener('click', () => {
+document.getElementById('runBtn')!.addEventListener('click', async () => {
   if (!currentCompileResult || !currentCompileResult.success) {
     alert('Fix compilation errors before running');
     return;
   }
   
   try {
-    const fn = new Function(
-      'characterState',
-      'casting',
-      'slot',
-      currentCompileResult.code
-    );
-    
-    const result = fn(
-      sampleContext.characterState,
-      sampleContext.casting,
-      sampleContext.slot
-    );
-    
-    const resultEl = document.getElementById('executionResult')!;
-    const resultValueEl = document.getElementById('resultValue')!;
-    
-    resultEl.style.display = 'block';
-    resultValueEl.textContent = JSON.stringify(result, null, 2);
-    
-    const consoleEl = document.getElementById('consoleOutput')!;
-    consoleEl.textContent = `Execution successful!\n\nResult:\n${JSON.stringify(result, null, 2)}`;
-    
+    const QuickJS = await load()
+
+    Scope.withScope((scope) => {
+      const vm = scope.manage(QuickJS.newContext())
+
+      const result = scope.manage(
+        vm.unwrapResult(
+          vm.evalCode(`
+            let character = ${JSON.stringify(sampleContext.characterState)};
+            let casting = ${JSON.stringify(sampleContext.casting)};
+            let slot = ${JSON.stringify(sampleContext.slot)};
+
+            function main() {
+              ${currentCompileResult.code}
+            }
+
+            main()
+          `)
+        )
+      )
+
+      const returnedValue = vm.dump(result)
+      // console.log("vm result:", vm.getNumber(nextId), "native state:", state)
+
+      // When the withScope block exits, it calls scope.dispose(), which in turn calls
+      // the .dispose() methods of all the disposables managed by the scope.
+
+      const resultEl = document.getElementById('executionResult')!;
+      const resultValueEl = document.getElementById('resultValue')!;
+      
+      resultEl.style.display = 'block';
+      resultValueEl.textContent = JSON.stringify(returnedValue, null, 2);
+      
+      const consoleEl = document.getElementById('consoleOutput')!;
+      consoleEl.textContent = `Execution successful!\n\nResult:\n${JSON.stringify(returnedValue, null, 2)}`;
+    })
   } catch (error: any) {
     alert('Execution error: ' + error.message);
     const consoleEl = document.getElementById('consoleOutput')!;

@@ -2,7 +2,10 @@
 // CODE GENERATOR - Compiles to JavaScript
 // ============================================================================
 
-import { ProgramNode, ASTNode } from "./type-checker";
+import { ProgramNode, ASTNode } from "./ast";
+import Lexer from "./lexer";
+import Parser from "./parser";
+import TypeChecker, { Type } from "./type-checker";
 
 export default class CodeGenerator {
   generate(ast: ProgramNode): string {
@@ -11,12 +14,20 @@ export default class CodeGenerator {
   
   private generateStatement(node: ASTNode): string {
     switch (node.type) {
+      case 'TypeDeclaration':
+        // Type declarations don't generate runtime code
+        return `// type ${node.name} = ...`;
+      
+      case 'InterfaceDeclaration':
+        // Interface declarations don't generate runtime code
+        return `// interface ${node.name} { ... }`;
+      
       case 'VariableDeclaration':
         const keyword = node.constant ? 'const' : 'let';
         return `${keyword} ${node.identifier} = ${this.generateExpression(node.value)};`;
       
       case 'FunctionDeclaration':
-        const params = node.params.join(', ');
+        const params = node.params.map(p => p.name).join(', ');
         const body = node.body.map(s => this.generateStatement(s)).join('\n');
         return `function ${node.name}(${params}) {\n${body}\n}`;
       
@@ -94,5 +105,68 @@ export default class CodeGenerator {
       default:
         return '';
     }
+  }
+}
+
+// ============================================================================
+// MAIN COMPILER API
+// ============================================================================
+
+interface CompileResult {
+  success: boolean;
+  returnType?: string;
+  code?: string;
+  error?: string;
+}
+
+export class TTRPGScriptCompiler {
+  private typeChecker: TypeChecker;
+  
+  constructor(contextTypes?: Record<string, Type>) {
+    this.typeChecker = new TypeChecker(contextTypes);
+  }
+  
+  registerType(name: string, type: Type) {
+    this.typeChecker.registerType(name, type);
+  }
+  
+  compile(source: string): CompileResult {
+    try {
+      // Lexical analysis
+      const lexer = new Lexer(source);
+      const tokens = lexer.tokenize();
+      
+      // Parsing
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+      
+      // Type checking and inference
+      const returnType = this.typeChecker.inferReturnType(ast);
+      const returnTypeStr = this.typeChecker.typeToString(returnType);
+      
+      // Code generation
+      const generator = new CodeGenerator();
+      const code = generator.generate(ast);
+      
+      return {
+        success: true,
+        returnType: returnTypeStr,
+        code,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+  
+  // Helper to create type definitions
+  static createObjectType(name: string, properties: Record<string, Type>): Type {
+    return { kind: 'object', name, properties };
+  }
+  
+  static createArrayType(elementType: Type): Type {
+    return { kind: 'array', elementType };
   }
 }

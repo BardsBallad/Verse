@@ -71,7 +71,8 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
-    "monaco-editor": "^0.45.0"
+    "monaco-editor": "^0.45.0",
+    "quickjs-emscripten": "^0.31.0"
   },
   "peerDependencies": {
     "monaco-editor": "^0.45.0"

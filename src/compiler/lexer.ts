@@ -20,6 +20,8 @@ export enum TokenType {
   IN = 'IN',
   RETURN = 'RETURN',
   FN = 'FN',
+  TYPE = 'TYPE',
+  INTERFACE = 'INTERFACE',
   
   // Operators
   PLUS = 'PLUS',
@@ -50,6 +52,7 @@ export enum TokenType {
   DOT = 'DOT',
   COLON = 'COLON',
   ARROW = 'ARROW',
+  PIPE = 'PIPE',
   
   // Special
   EOF = 'EOF',
@@ -156,16 +159,22 @@ export default class Lexer {
       return { type: TokenType.GREATER, value: '>', line: this.line, column: startColumn };
     }
     
-    if (char === '&' && this.peek() === '&') {
-      this.advance();
-      this.advance();
-      return { type: TokenType.AMPERSAND_AMPERSAND, value: '&&', line: this.line, column: startColumn };
+    if (char === '&') {
+      this.advance()
+      if (this.peek() === '&') {
+        this.advance();
+        return { type: TokenType.AMPERSAND_AMPERSAND, value: '&&', line: this.line, column: startColumn };
+      }
+      this.backup()
     }
     
-    if (char === '|' && this.peek() === '|') {
-      this.advance();
-      this.advance();
-      return { type: TokenType.PIPE_PIPE, value: '||', line: this.line, column: startColumn };
+    if (char === '|') {
+      this.advance()
+      if (this.peek() === '|') {
+        this.advance();
+        return { type: TokenType.PIPE_PIPE, value: '||', line: this.line, column: startColumn };
+      }
+      return { type: TokenType.PIPE, value: '|', line: this.line, column: startColumn };
     }
     
     if (char === '-') {
@@ -258,6 +267,8 @@ export default class Lexer {
       'in': TokenType.IN,
       'return': TokenType.RETURN,
       'fn': TokenType.FN,
+      'type': TokenType.TYPE,
+      'interface': TokenType.INTERFACE,
       'true': TokenType.TRUE,
       'false': TokenType.FALSE,
       'null': TokenType.NULL,
@@ -289,6 +300,11 @@ export default class Lexer {
   
   private peek(): string {
     return this.source[this.pos] || '';
+  }
+
+  private backup() {
+    this.pos--;
+    this.column--;
   }
   
   private advance() {

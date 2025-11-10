@@ -2,8 +2,8 @@
 // PARSER - Builds AST from tokens
 // ============================================================================
 
-import { Token, TokenType } from "./lexer";
-import { ProgramNode, ASTNode, VariableDeclarationNode, FunctionDeclarationNode, ReturnStatementNode, IfStatementNode, ForStatementNode, ExpressionStatementNode } from "./type-checker";
+import { ProgramNode, ASTNode, TypeDeclarationNode, InterfaceDeclarationNode, TypeAnnotation, VariableDeclarationNode, FunctionDeclarationNode, ReturnStatementNode, IfStatementNode, ForStatementNode, ExpressionStatementNode } from './ast';
+import { Token, TokenType } from './lexer';
 
 export default class Parser {
   private tokens: Token[];
@@ -23,7 +23,21 @@ export default class Parser {
     return { type: 'Program', body };
   }
   
+  // ============================================================================
+  // Statements
+  // ============================================================================
+  
   private statement(): ASTNode {
+    console.log(this.peek().type)
+
+    if (this.match(TokenType.TYPE)) {
+      return this.typeDeclaration();
+    }
+    
+    if (this.match(TokenType.INTERFACE)) {
+      return this.interfaceDeclaration();
+    }
+    
     if (this.match(TokenType.LET, TokenType.CONST)) {
       return this.variableDeclaration();
     }
@@ -47,26 +61,76 @@ export default class Parser {
     return this.expressionStatement();
   }
   
+  private typeDeclaration(): TypeDeclarationNode {
+    const name = this.consume(TokenType.IDENTIFIER, 'Expected type name').value;
+    this.consume(TokenType.EQUALS, 'Expected = after type name');
+    const typeAnnotation = this.parseTypeAnnotation();
+    return { type: 'TypeDeclaration', name, typeAnnotation };
+  }
+  
+  private interfaceDeclaration(): InterfaceDeclarationNode {
+    const name = this.consume(TokenType.IDENTIFIER, 'Expected interface name').value;
+    this.consume(TokenType.LBRACE, 'Expected { after interface name');
+    
+    const properties: { key: string; typeAnnotation: TypeAnnotation }[] = [];
+    
+    while (!this.check(TokenType.RBRACE) && !this.isAtEnd()) {
+      const key = this.consume(TokenType.IDENTIFIER, 'Expected property name').value;
+      this.consume(TokenType.COLON, 'Expected : after property name');
+      const typeAnnotation = this.parseTypeAnnotation();
+      properties.push({ key, typeAnnotation });
+      
+      // Optional comma
+      this.match(TokenType.COMMA);
+    }
+    
+    this.consume(TokenType.RBRACE, 'Expected } after interface body');
+    
+    return { type: 'InterfaceDeclaration', name, properties };
+  }
+  
   private variableDeclaration(): VariableDeclarationNode {
     const constant = this.previous().type === TokenType.CONST;
     const identifier = this.consume(TokenType.IDENTIFIER, 'Expected variable name').value;
+    
+    // Optional type annotation: let x: number = 5
+    let typeAnnotation: TypeAnnotation | undefined;
+    if (this.match(TokenType.COLON)) {
+      typeAnnotation = this.parseTypeAnnotation();
+    }
+    
     this.consume(TokenType.EQUALS, 'Expected = after variable name');
     const value = this.expression();
-    return { type: 'VariableDeclaration', identifier, value, constant };
+    return { type: 'VariableDeclaration', identifier, value, constant, typeAnnotation };
   }
   
   private functionDeclaration(): FunctionDeclarationNode {
     const name = this.consume(TokenType.IDENTIFIER, 'Expected function name').value;
     this.consume(TokenType.LPAREN, 'Expected ( after function name');
     
-    const params: string[] = [];
+    const params: { name: string; typeAnnotation?: TypeAnnotation }[] = [];
     if (!this.check(TokenType.RPAREN)) {
       do {
-        params.push(this.consume(TokenType.IDENTIFIER, 'Expected parameter name').value);
+        const paramName = this.consume(TokenType.IDENTIFIER, 'Expected parameter name').value;
+        
+        // Optional type annotation: fn add(a: number, b: number)
+        let typeAnnotation: TypeAnnotation | undefined;
+        if (this.match(TokenType.COLON)) {
+          typeAnnotation = this.parseTypeAnnotation();
+        }
+        
+        params.push({ name: paramName, typeAnnotation });
       } while (this.match(TokenType.COMMA));
     }
     
     this.consume(TokenType.RPAREN, 'Expected ) after parameters');
+    
+    // Optional return type: fn add() -> number
+    let returnTypeAnnotation: TypeAnnotation | undefined;
+    if (this.match(TokenType.ARROW)) {
+      returnTypeAnnotation = this.parseTypeAnnotation();
+    }
+    
     this.consume(TokenType.LBRACE, 'Expected { before function body');
     
     const body: ASTNode[] = [];
@@ -76,7 +140,7 @@ export default class Parser {
     
     this.consume(TokenType.RBRACE, 'Expected } after function body');
     
-    return { type: 'FunctionDeclaration', name, params, body };
+    return { type: 'FunctionDeclaration', name, params, returnTypeAnnotation, body };
   }
   
   private returnStatement(): ReturnStatementNode {
@@ -128,6 +192,95 @@ export default class Parser {
     const expression = this.expression();
     return { type: 'ExpressionStatement', expression };
   }
+  
+  // ============================================================================
+  // Type Annotations
+  // ============================================================================
+  
+  private parseTypeAnnotation(): TypeAnnotation {
+    // Union type: number | string | null
+    const types: TypeAnnotation[] = [];
+    
+    types.push(this.parseSingleType());
+    
+    while (this.match(TokenType.PIPE)) {
+      types.push(this.parseSingleType());
+    }
+    
+    if (types.length === 1) {
+      return types[0];
+    }
+    
+    return { type: 'UnionType', types };
+  }
+  
+  private parseSingleType(): TypeAnnotation {
+    // Array type: number[]
+    const baseType = this.parseBaseType();
+    
+    if (this.match(TokenType.LBRACKET)) {
+      this.consume(TokenType.RBRACKET, 'Expected ] after [');
+      return { type: 'ArrayType', elementType: baseType };
+    }
+    
+    return baseType;
+  }
+  
+  private parseBaseType(): TypeAnnotation {
+    const token = this.peek();
+    
+    // Primitive types
+    if (token.type === TokenType.IDENTIFIER) {
+      const value = token.value;
+      
+      if (value === 'number' || value === 'string' || 
+          value === 'boolean' || value === 'null') {
+        this.advance();
+        return { 
+          type: 'PrimitiveType', 
+          name: value as 'number' | 'string' | 'boolean' | 'null'
+        };
+      }
+    }
+
+    // nulll gets matched as a token since it's also a value
+    if (token.type === TokenType.NULL) {
+      this.advance();
+      return { 
+        type: 'PrimitiveType', 
+        name: token.value as 'null'
+      };
+    }
+    
+    // Object type: { name: string, level: number }
+    if (this.match(TokenType.LBRACE)) {
+      const properties: { key: string; valueType: TypeAnnotation }[] = [];
+      
+      while (!this.check(TokenType.RBRACE) && !this.isAtEnd()) {
+        const key = this.consume(TokenType.IDENTIFIER, 'Expected property name').value;
+        this.consume(TokenType.COLON, 'Expected : after property name');
+        const valueType = this.parseTypeAnnotation();
+        properties.push({ key, valueType });
+        
+        this.match(TokenType.COMMA);
+      }
+      
+      this.consume(TokenType.RBRACE, 'Expected }');
+      return { type: 'ObjectType', properties };
+    }
+    
+    // Type reference: Spell, Character, etc.
+    if (this.check(TokenType.IDENTIFIER)) {
+      const name = this.advance().value;
+      return { type: 'TypeReference', name };
+    }
+    
+    throw new Error(`Expected type annotation at line ${token.line}`);
+  }
+  
+  // ============================================================================
+  // Expressions
+  // ============================================================================
   
   private expression(): ASTNode {
     return this.assignment();
@@ -382,6 +535,10 @@ export default class Parser {
     throw new Error(`Unexpected token: ${this.peek().type} at line ${this.peek().line}`);
   }
   
+  // ============================================================================
+  // Utility Methods
+  // ============================================================================
+  
   private match(...types: TokenType[]): boolean {
     for (const type of types) {
       if (this.check(type)) {
@@ -419,3 +576,38 @@ export default class Parser {
     throw new Error(`${message} at line ${this.peek().line}, got ${this.peek().type}`);
   }
 }
+
+// ============================================================================
+// Example Usage
+// ============================================================================
+
+/*
+import { Lexer } from './lexer';
+import { Parser } from './parser';
+
+const source = `
+type SpellLevel = number
+
+interface Spell {
+  name: string,
+  level: SpellLevel,
+  damage: string | null
+}
+
+fn getSpells(maxLevel: number) -> Spell[] {
+  const filtered: Spell[] = casting.spells.filter(s => s.level <= maxLevel)
+  return filtered
+}
+
+const result: Spell[] = getSpells(3)
+return result
+`;
+
+const lexer = new Lexer(source);
+const tokens = lexer.tokenize();
+
+const parser = new Parser(tokens);
+const ast = parser.parse();
+
+console.log(JSON.stringify(ast, null, 2));
+*/

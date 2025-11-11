@@ -168,6 +168,8 @@ export default class TypeChecker {
     if (node.typeAnnotation) {
       const declaredType = this.annotationToType(node.typeAnnotation);
       if (!this.isAssignable(valueType, declaredType)) {
+        console.log(valueType, declaredType)
+        console.log(node)
         throw new TypeError(
           `Cannot assign ${this.typeToString(valueType)} to ${this.typeToString(declaredType)}`
         );
@@ -245,7 +247,7 @@ export default class TypeChecker {
     
     // Union type checking
     if (target.kind === 'union') {
-      return target.types!.some(t => this.isAssignable(source, t));
+      return target.types!.some(t => this.isAssignable(t, source));
     }
     
     // Array covariance

@@ -1,20 +1,23 @@
 {
-  "name": "ttrpg-script-lang",
-  "version": "0.1.0",
-  "description": "A custom typed scripting language for TTRPG systems with Monaco editor integration",
+  "name": "@bardsballad/verse",
+  "publishConfig": {
+    "access": "public"
+  },
+  "version": "0.1.1",
+  "description": "A custom typed scripting language for BardsBallad with Monaco editor integration",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./monaco": {
+      "types": "./dist/monaco/index.d.ts",
       "import": "./dist/monaco/index.mjs",
-      "require": "./dist/monaco/index.js",
-      "types": "./dist/monaco/index.d.ts"
+      "require": "./dist/monaco/index.js"
     }
   },
   "files": [
@@ -34,7 +37,7 @@
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "bun run build && bun test"
   },
   "keywords": [
     "ttrpg",
@@ -48,16 +51,16 @@
     "dnd",
     "character-sheet"
   ],
-  "author": "Your Name",
+  "author": "KingCosmic",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/ttrpg-script-lang.git"
+    "url": "https://github.com/BardsBallad/Verse.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/ttrpg-script-lang/issues"
+    "url": "https://github.com/BardsBallad/Verse/issues"
   },
-  "homepage": "https://github.com/yourusername/ttrpg-script-lang#readme",
+  "homepage": "https://github.com/BardsBallad/Verse#readme",
   "devDependencies": {
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",

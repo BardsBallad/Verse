@@ -366,9 +366,9 @@ export class TTRPGScriptLanguageService {
           if (!word) return null;
           
           // Try to get type info for the identifier
-          const lineContent = model.getLineContent(position.lineNumber);
+          // const lineContent = model.getLineContent(position.lineNumber);
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const beforeWord = lineContent.slice(0, word.startColumn - 1);
+          // const beforeWord = lineContent.slice(0, word.startColumn - 1);
           
           // Check if this is a variable we can infer
           try {

@@ -15,14 +15,14 @@ A custom typed scripting language designed for tabletop RPG (TTRPG) systems with
 
 ## 🚀 Try It Online
 
-Visit the [Live Playground](https://yourusername.github.io/ttrpg-script-lang/) to try it out!
+Visit the [Live Playground](https://bardsballad.github.io/Verse/) to try it out!
 
 ## 📦 Installation
 
 ```bash
-npm install ttrpg-script-lang
+npm install @bardsballad/verse
 # or
-yarn add ttrpg-script-lang
+yarn add @bardsballad/verse
 ```
 
 ## 🎮 Quick Start
@@ -30,10 +30,10 @@ yarn add ttrpg-script-lang
 ### Basic Usage
 
 ```typescript
-import { TTRPGScriptCompiler, BUILTIN_TYPES } from 'ttrpg-script-lang';
+import { VerseScriptCompiler, BUILTIN_TYPES } from '@bardsballad/verse';
 
 // Define your types
-const SpellType = TTRPGScriptCompiler.createObjectType('Spell', {
+const SpellType = VerseScriptCompiler.createObjectType('Spell', {
   name: BUILTIN_TYPES.string,
   level: BUILTIN_TYPES.number,
   damage: BUILTIN_TYPES.string,
@@ -45,7 +45,7 @@ const contextTypes = {
 };
 
 // Create compiler
-const compiler = new TTRPGScriptCompiler(contextTypes);
+const compiler = new VerseScriptCompiler(contextTypes);
 
 // Compile a script
 const result = compiler.compile(`
@@ -60,10 +60,10 @@ console.log(result.code);       // Compiled JavaScript
 ### Monaco Editor Integration
 
 ```typescript
-import { createTTRPGScriptEditor } from 'ttrpg-script-lang/monaco';
+import { createVerseScriptEditor } from '@bardsballad/verse/monaco';
 
 // Create editor with language service
-const { editor, languageService } = createTTRPGScriptEditor(
+const { editor, languageService } = createVerseScriptEditor(
   document.getElementById('editor'),
   contextTypes,
   'return casting.spells'
@@ -171,8 +171,8 @@ ttrpg-script-lang/
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ttrpg-script-lang.git
-cd ttrpg-script-lang
+git clone https://github.com/BardsBallad/Verse.git
+cd Verse
 
 # Install dependencies
 npm install
@@ -262,7 +262,7 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 ### Development Roadmap
 
 - [ ] Generics support
-- [ ] Type annotations (`let x: number = 5`)
+- [X] Type annotations (`let x: number = 5`)
 - [ ] Dice roll syntax (`roll 2d6 + 3`)
 - [ ] Pattern matching
 - [ ] Async/await support
@@ -282,8 +282,8 @@ MIT License - see [LICENSE](LICENSE) for details
 
 ## 📧 Contact
 
-- GitHub: [@yourusername](https://github.com/yourusername)
-- Issues: [GitHub Issues](https://github.com/yourusername/ttrpg-script-lang/issues)
+- GitHub: [@KingCosmic](https://github.com/KingCosmic)
+- Issues: [GitHub Issues](https://github.com/BardsBallad/Verse/issues)
 
 ---
 

@@ -4,7 +4,7 @@
 
 import { ProgramNode, ASTNode } from "./ast";
 
-export default class CodeGenerator {
+export class CodeGenerator {
   generate(ast: ProgramNode): string {
     return ast.body.map(stmt => this.generateStatement(stmt)).filter(line => line !== '').join('\n');
   }

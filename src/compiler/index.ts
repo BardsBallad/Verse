@@ -2,10 +2,10 @@
 // MAIN COMPILER API
 // ============================================================================
 
-import CodeGenerator from "./code-generator";
-import Lexer from "./lexer";
-import Parser from "./parser";
-import TypeChecker, { Type } from "./type-checker";
+import { CodeGenerator } from "./code-generator";
+import { Lexer } from "./lexer";
+import { Parser } from "./parser";
+import { TypeChecker, Type } from "./type-checker";
 export interface CompileResult {
   success: boolean;
   returnType?: string;
@@ -13,7 +13,7 @@ export interface CompileResult {
   error?: string;
 }
 
-export default class VerseScriptCompiler {
+export class VerseScriptCompiler {
   private typeChecker: TypeChecker;
   
   constructor(contextTypes?: Record<string, Type>) {

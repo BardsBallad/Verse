@@ -26,7 +26,7 @@ export const BUILTIN_TYPES = {
 // TYPE CHECKER with Inference
 // ============================================================================
 
-export default class TypeChecker {
+export class TypeChecker {
   private symbolTable = new Map<string, Type>();
   private customTypes = new Map<string, Type>();
   

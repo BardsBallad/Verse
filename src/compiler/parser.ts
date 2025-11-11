@@ -5,7 +5,7 @@
 import { ProgramNode, ASTNode, TypeDeclarationNode, InterfaceDeclarationNode, TypeAnnotation, VariableDeclarationNode, FunctionDeclarationNode, ReturnStatementNode, IfStatementNode, ForStatementNode, ExpressionStatementNode } from './ast';
 import { Token, TokenType } from './lexer';
 
-export default class Parser {
+export class Parser {
   private tokens: Token[];
   private pos = 0;
   

@@ -4,7 +4,7 @@
 import * as monaco from 'monaco-editor';
 // @ts-expect-error this file does exist.
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import VerseScriptCompiler from '../src/compiler';
+import { VerseScriptCompiler } from '../src';
 
 import { Scope } from 'quickjs-emscripten'
 import { load } from './quick';

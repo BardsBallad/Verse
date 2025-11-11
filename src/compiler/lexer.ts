@@ -66,7 +66,7 @@ export interface Token {
   column: number;
 }
 
-export default class Lexer {
+export class Lexer {
   private source: string;
   private pos = 0;
   private line = 1;

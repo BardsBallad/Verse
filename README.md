@@ -1,8 +1,8 @@
-# TTRPG Script Language
+# Verse Script Language
 
 A custom typed scripting language designed for tabletop RPG (TTRPG) systems with full type inference, Monaco editor integration, and compile-to-JavaScript capabilities.
 
-![TTRPG Script Playground](https://via.placeholder.com/800x400?text=TTRPG+Script+Playground)
+![Verse Script Playground](https://via.placeholder.com/800x400?text=TTRPG+Script+Playground)
 
 ## 🎲 Features
 

@@ -1,5 +1,5 @@
-export * from './compiler'
 export * from './compiler/ast'
+export * from './compiler/index'
 export * from './compiler/lexer'
 export * from './compiler/parser'
 export * from './compiler/type-checker'

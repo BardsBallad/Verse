@@ -1,1 +1,6 @@
 export * from './compiler'
+export * from './compiler/ast'
+export * from './compiler/lexer'
+export * from './compiler/parser'
+export * from './compiler/type-checker'
+export * from './compiler/code-generator'

@@ -6,9 +6,6 @@ import CodeGenerator from "./code-generator";
 import Lexer from "./lexer";
 import Parser from "./parser";
 import TypeChecker, { Type } from "./type-checker";
-
-export * from './type-checker'
-
 export interface CompileResult {
   success: boolean;
   returnType?: string;

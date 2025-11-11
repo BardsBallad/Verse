@@ -168,8 +168,6 @@ export default class TypeChecker {
     if (node.typeAnnotation) {
       const declaredType = this.annotationToType(node.typeAnnotation);
       if (!this.isAssignable(valueType, declaredType)) {
-        console.log(valueType, declaredType)
-        console.log(node)
         throw new TypeError(
           `Cannot assign ${this.typeToString(valueType)} to ${this.typeToString(declaredType)}`
         );

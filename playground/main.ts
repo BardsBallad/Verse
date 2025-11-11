@@ -4,11 +4,11 @@
 import * as monaco from 'monaco-editor';
 // @ts-expect-error this file does exist.
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import { BUILTIN_TYPES } from '../src/index';
 import VerseScriptCompiler from '../src/compiler';
 
 import { Scope } from 'quickjs-emscripten'
 import { load } from './quick';
+import { BUILTIN_TYPES } from '../src/compiler/type-checker';
 
 // Setup Monaco workers
 self.MonacoEnvironment = {

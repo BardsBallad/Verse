@@ -3,7 +3,7 @@ import { defineConfig } from 'tsup';
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
-    'monaco/index': 'src/monaco/language-service.ts'
+    // 'monaco/index': 'src/monaco/language-service.ts'
   },
   format: ['cjs', 'esm'],
   dts: true,
@@ -12,5 +12,5 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   minify: false,
-  external: ['monaco-editor'],
+  // external: ['monaco-editor'],
 });

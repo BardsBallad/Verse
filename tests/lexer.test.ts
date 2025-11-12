@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import Lexer, { TokenType } from '../src/compiler/lexer';
+import { Lexer, TokenType } from '../src/compiler/lexer';
 
 describe('Lexer', () => {
   it('should tokenize numbers', () => {

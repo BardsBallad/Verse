@@ -3,7 +3,7 @@
 // ============================================================================
 
 import * as monaco from 'monaco-editor';
-import VerseScriptCompiler from '../compiler';
+import {VerseScriptCompiler} from '../compiler';
 import { Type } from '../compiler/type-checker';
 
 export interface CompletionContext {

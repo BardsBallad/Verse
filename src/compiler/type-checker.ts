@@ -32,12 +32,17 @@ export class TypeChecker {
   private symbolTable = new Map<string, Type>();
   private customTypes = new Map<string, Type>();
   private currentFunctionIsAsync = false; // Track if we're in an async function
+  private allowTopLevelAwait = true; // whether top-level await is allowed (generated code runs in async wrapper)
   
-  constructor(contextTypes?: Record<string, Type>) {
+  constructor(contextTypes?: Record<string, Type>, options?: { allowTopLevelAwait?: boolean }) {
     if (contextTypes) {
       for (const [name, type] of Object.entries(contextTypes)) {
         this.symbolTable.set(name, type);
       }
+    }
+
+    if (options && typeof options.allowTopLevelAwait === 'boolean') {
+      this.allowTopLevelAwait = options.allowTopLevelAwait;
     }
   }
   
@@ -58,12 +63,19 @@ export class TypeChecker {
   
   check(ast: ProgramNode): Type {
     let lastType: Type = BUILTIN_TYPES.unknown;
-    
-    // Process all statements in order to build symbol table
-    for (const statement of ast.body) {
-      lastType = this.checkStatement(statement);
+    // When checking a top-level program, treat top-level as async when allowed so `await` is permitted
+    const savedAsync = this.currentFunctionIsAsync;
+    this.currentFunctionIsAsync = this.allowTopLevelAwait;
+
+    try {
+      // Process all statements in order to build symbol table
+      for (const statement of ast.body) {
+        lastType = this.checkStatement(statement);
+      }
+    } finally {
+      this.currentFunctionIsAsync = savedAsync;
     }
-    
+
     return lastType;
   }
   

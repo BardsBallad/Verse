@@ -120,7 +120,8 @@ export interface CallExpressionNode extends BaseNode {
 export interface MemberExpressionNode extends BaseNode {
   type: 'MemberExpression';
   object: ASTNode;
-  property: string;
+  // property may be a simple identifier (string) or a computed expression ASTNode
+  property: string | ASTNode;
   computed: boolean;
 }
 
@@ -378,7 +379,11 @@ export function visitNode(node: ASTNode, visitor: ASTVisitor): void {
       break;
     case 'MemberExpression':
       visitor.visitMemberExpression?.(node);
-      visitNode(node.object, visitor);
+        visitNode(node.object, visitor);
+        // If computed property is an expression, visit it as well
+        if (node.computed && typeof node.property !== 'string') {
+          visitNode(node.property, visitor);
+        }
       break;
     case 'ArrayExpression':
       visitor.visitArrayExpression?.(node);

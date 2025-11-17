@@ -76,9 +76,19 @@ export class CodeGenerator {
       
       case 'MemberExpression':
         const object = this.generateExpression(node.object);
-        return node.computed 
-          ? `${object}[${node.property}]`
-          : `${object}.${node.property}`;
+        if (node.computed) {
+          // property may be a string (from a literal) or an expression AST node
+          if (typeof node.property === 'string') {
+            // numeric string -> emit as number, otherwise emit as quoted string
+            if (/^-?\d+$/.test(node.property)) {
+              return `${object}[${node.property}]`;
+            }
+            return `${object}[${JSON.stringify(node.property)}]`;
+          }
+          return `${object}[${this.generateExpression(node.property)}]`;
+        }
+
+        return `${object}.${node.property}`;
       
       case 'ArrayExpression':
         const elements = node.elements.map(el => this.generateExpression(el)).join(', ');

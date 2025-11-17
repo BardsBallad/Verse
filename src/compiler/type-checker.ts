@@ -273,6 +273,14 @@ export class TypeChecker {
   }
   
   private isAssignable(source: Type, target: Type): boolean {
+    // If source is a union, it's assignable to target only if every
+    // member of the union is assignable to the target.
+    if (source.kind === 'union') {
+      // TODO: ignore null in this
+      // Spell should be assignable to Spell | null for example
+      return source.types!.every(s => this.isAssignable(s, target));
+    }
+
     // Same type
     if (this.typesEqual(source, target)) {
       return true;
@@ -473,11 +481,17 @@ export class TypeChecker {
     // Check for built-in array methods
     if (node.callee.type === 'MemberExpression') {
       const objectType = this.inferExpression(node.callee.object);
-      const method = node.callee.property;
+      // property may be a string or an ASTNode for computed access
+      let method: string | null = null;
+      if (typeof node.callee.property === 'string') {
+        method = node.callee.property;
+      } else if (node.callee.property.type === 'Literal' && typeof (node.callee.property as LiteralNode).value === 'string') {
+        method = (node.callee.property as LiteralNode).value as string;
+      }
       
-      if (objectType.kind === 'array' && objectType.elementType) {
+  if (method && objectType.kind === 'array' && objectType.elementType) {
         // Array methods that return same type array
-        if (['filter', 'map', 'slice', 'concat'].includes(method)) {
+  if (['filter', 'map', 'slice', 'concat'].includes(method)) {
           if (method === 'map' && node.arguments.length > 0) {
             // For map, we'd need to infer the callback return type
             // For simplicity, keep the same element type
@@ -512,16 +526,55 @@ export class TypeChecker {
   
   private inferMemberExpression(node: MemberExpressionNode): Type {
     const objectType = this.inferExpression(node.object);
-    
-    if (objectType.kind === 'object' && objectType.properties) {
-      return objectType.properties[node.property] || BUILTIN_TYPES.unknown;
+
+    // Non-computed property: property should be a string
+    if (!node.computed) {
+      if (objectType.kind === 'object' && objectType.properties) {
+        return objectType.properties[(node.property as string)] || BUILTIN_TYPES.unknown;
+      }
+
+      if (objectType.kind === 'array' && (node.property as string) === 'length') {
+        return BUILTIN_TYPES.number;
+      }
+
+      return BUILTIN_TYPES.unknown;
     }
-    
-    // Handle array.length
-    if (objectType.kind === 'array' && node.property === 'length') {
-      return BUILTIN_TYPES.number;
+
+    // Computed property: property may be a string (from a literal) or an ASTNode
+    let resolvedProp: string | number | null = null;
+
+    if (typeof node.property === 'string') {
+      // If it's a numeric string, treat as index
+      if (/^-?\d+$/.test(node.property)) {
+        resolvedProp = Number(node.property);
+      } else {
+        resolvedProp = node.property;
+      }
+    } else {
+      // property is an AST node; if it's a literal we can extract value
+      if (node.property.type === 'Literal') {
+        const v = (node.property as LiteralNode).value;
+        if (typeof v === 'number' || typeof v === 'string') resolvedProp = v;
+      }
     }
-    
+
+    // If we resolved a string property and object is object-like
+    if (resolvedProp !== null && typeof resolvedProp === 'string') {
+      if (objectType.kind === 'object' && objectType.properties) {
+        return objectType.properties[resolvedProp] || BUILTIN_TYPES.unknown;
+      }
+      if (objectType.kind === 'array' && resolvedProp === 'length') {
+        return BUILTIN_TYPES.number;
+      }
+    }
+
+    // If we resolved a numeric index and object is array
+    if (resolvedProp !== null && typeof resolvedProp === 'number') {
+      if (objectType.kind === 'array' && objectType.elementType) {
+        return objectType.elementType;
+      }
+    }
+
     return BUILTIN_TYPES.unknown;
   }
   

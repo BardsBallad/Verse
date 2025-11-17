@@ -446,17 +446,25 @@ export class Parser {
         const indexExpr = this.expression();
         this.consume(TokenType.RBRACKET, 'Expected ] after index');
         
-        // Convert to computed member access
+        // Convert to computed member access. If index is a literal we store the
+        // literal's string form (numbers left unquoted when generated). If it's
+        // a complex expression we keep the AST node as the property so code
+        // generation can emit the expression inside the brackets.
         if (indexExpr.type === 'Literal') {
-          expr = { 
-            type: 'MemberExpression', 
-            object: expr, 
-            property: String(indexExpr.value), 
-            computed: true 
+          expr = {
+            type: 'MemberExpression',
+            object: expr,
+            property: String(indexExpr.value),
+            computed: true
           };
         } else {
-          // For complex expressions, we'll need to handle this differently
-          throw new Error('Complex computed member access not yet supported');
+          // Keep complex expression as the computed property AST node.
+          expr = {
+            type: 'MemberExpression',
+            object: expr,
+            property: indexExpr,
+            computed: true,
+          };
         }
       } else {
         break;

@@ -2,7 +2,7 @@
 // CODE GENERATOR - Compiles to JavaScript with Async/Await
 // ============================================================================
 
-import { ProgramNode, ASTNode } from "./ast";
+import { ProgramNode, ASTNode, ObjectExpressionNode } from "./ast";
 
 export class CodeGenerator {
   generate(ast: ProgramNode): string {
@@ -21,6 +21,15 @@ export class CodeGenerator {
       
       case 'VariableDeclaration':
         const keyword = node.constant ? 'const' : 'let';
+
+        // If this variable has a type annotation that is a named type (TypeReference)
+        // and the value is an object literal, inject a `_type` property so runtime
+        // objects carry their declared type name.
+        if (node.value.type === 'ObjectExpression' && node.typeAnnotation && (node.typeAnnotation as any).type === 'TypeReference') {
+          const typeName = (node.typeAnnotation as any).name;
+          return `${keyword} ${node.identifier} = ${this.generateObjectExpression(node.value as any, typeName)};`;
+        }
+
         return `${keyword} ${node.identifier} = ${this.generateExpression(node.value)};`;
       
       case 'FunctionDeclaration':
@@ -95,10 +104,7 @@ export class CodeGenerator {
         return `[${elements}]`;
       
       case 'ObjectExpression':
-        const props = node.properties
-          .map(p => `${p.key}: ${this.generateExpression(p.value)}`)
-          .join(', ');
-        return `{ ${props} }`;
+        return this.generateObjectExpression(node as ObjectExpressionNode);
       
       case 'ConditionalExpression':
         return `(${this.generateExpression(node.test)} ? ${this.generateExpression(node.consequent)} : ${this.generateExpression(node.alternate)})`;
@@ -118,5 +124,24 @@ export class CodeGenerator {
       default:
         return '';
     }
+  }
+
+  // Generate an object literal, optionally injecting a leading `_type` property
+  // when `typeName` is provided.
+  private generateObjectExpression(node: ObjectExpressionNode, typeName?: string): string {
+    const parts: string[] = [];
+
+    // If object already contains an explicit `_type` property, don't inject.
+    const hasExplicitTypeProp = node.properties.some(p => p.key === '_type');
+
+    if (typeName && !hasExplicitTypeProp) {
+      parts.push(`_type: ${JSON.stringify(typeName)}`);
+    }
+
+    for (const p of node.properties) {
+      parts.push(`${p.key}: ${this.generateExpression(p.value)}`);
+    }
+
+    return `{ ${parts.join(', ')} }`;
   }
 }

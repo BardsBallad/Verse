@@ -23,6 +23,10 @@ export class VerseScriptCompiler {
   registerType(name: string, type: Type) {
     this.typeChecker.registerType(name, type);
   }
+
+  registerFunction(name: string, params: Type[], returnType: Type, isAsync: boolean = false) {
+    this.typeChecker.registerFunction(name, params, returnType, isAsync);
+  }
   
   compile(source: string): CompileResult {
     try {

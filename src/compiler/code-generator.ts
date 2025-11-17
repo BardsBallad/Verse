@@ -1,5 +1,5 @@
 // ============================================================================
-// CODE GENERATOR - Compiles to JavaScript
+// CODE GENERATOR - Compiles to JavaScript with Async/Await
 // ============================================================================
 
 import { ProgramNode, ASTNode } from "./ast";
@@ -24,9 +24,10 @@ export class CodeGenerator {
         return `${keyword} ${node.identifier} = ${this.generateExpression(node.value)};`;
       
       case 'FunctionDeclaration':
+        const asyncKeyword = node.async ? 'async ' : '';
         const params = node.params.map(p => p.name).join(', ');
         const body = node.body.map(s => this.generateStatement(s)).join('\n');
-        return `function ${node.name}(${params}) {\n${body}\n}`;
+        return `${asyncKeyword}function ${node.name}(${params}) {\n${body}\n}`;
       
       case 'ReturnStatement':
         return node.value ? `return ${this.generateExpression(node.value)};` : 'return;';
@@ -40,9 +41,10 @@ export class CodeGenerator {
         return `if (${condition}) {\n${consequent}\n} ${alternate}`;
       
       case 'ForStatement':
+        const awaitKeyword = node.async ? 'await ' : '';
         const iterable = this.generateExpression(node.iterable);
         const forBody = node.body.map(s => this.generateStatement(s)).join('\n');
-        return `for (const ${node.variable} of ${iterable}) {\n${forBody}\n}`;
+        return `for ${awaitKeyword}(const ${node.variable} of ${iterable}) {\n${forBody}\n}`;
       
       case 'ExpressionStatement':
         return `${this.generateExpression(node.expression)};`;
@@ -92,12 +94,16 @@ export class CodeGenerator {
         return `(${this.generateExpression(node.test)} ? ${this.generateExpression(node.consequent)} : ${this.generateExpression(node.alternate)})`;
       
       case 'ArrowFunction':
+        const asyncArrow = node.async ? 'async ' : '';
         const fnParams = node.params.join(', ');
         const fnBody = this.generateExpression(node.body);
-        return `(${fnParams}) => ${fnBody}`;
+        return `${asyncArrow}(${fnParams}) => ${fnBody}`;
       
       case 'AssignmentExpression':
         return `${this.generateExpression(node.target)} = ${this.generateExpression(node.value)}`;
+      
+      case 'AwaitExpression':
+        return `await ${this.generateExpression(node.argument)}`;
       
       default:
         return '';

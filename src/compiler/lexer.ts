@@ -1,5 +1,5 @@
 // ============================================================================
-// LEXER - Tokenizes source code
+// LEXER - Tokenizes source code with Async/Await support
 // ============================================================================
 
 export enum TokenType {
@@ -22,6 +22,8 @@ export enum TokenType {
   FN = 'FN',
   TYPE = 'TYPE',
   INTERFACE = 'INTERFACE',
+  ASYNC = 'ASYNC',
+  AWAIT = 'AWAIT',
   
   // Operators
   PLUS = 'PLUS',
@@ -277,6 +279,8 @@ export class Lexer {
       'true': TokenType.TRUE,
       'false': TokenType.FALSE,
       'null': TokenType.NULL,
+      'async': TokenType.ASYNC,   // NEW
+      'await': TokenType.AWAIT,   // NEW
     };
     
     const type = keywords[value] || TokenType.IDENTIFIER;
@@ -329,98 +333,3 @@ export class Lexer {
     return this.isAlpha(char) || this.isDigit(char);
   }
 }
-
-// ============================================================================
-// EXAMPLE USAGE
-// ============================================================================
-
-// Define your TTRPG types
-// const SpellType = TTRPGScriptCompiler.createObjectType('Spell', {
-//   name: BUILTIN_TYPES.string,
-//   level: BUILTIN_TYPES.number,
-//   damage: BUILTIN_TYPES.string,
-// });
-
-// const SpellSlotType = TTRPGScriptCompiler.createObjectType('SpellSlot', {
-//   level: BUILTIN_TYPES.number,
-//   current: BUILTIN_TYPES.number,
-//   max: BUILTIN_TYPES.number,
-// });
-
-// const SpellCastingType = TTRPGScriptCompiler.createObjectType('SpellCasting', {
-//   name: BUILTIN_TYPES.string,
-//   slots: TTRPGScriptCompiler.createArrayType(SpellSlotType),
-//   spells: TTRPGScriptCompiler.createArrayType(SpellType),
-// });
-
-// const CharacterStateType = TTRPGScriptCompiler.createObjectType('CharacterState', {
-//   hp: BUILTIN_TYPES.number,
-//   maxHp: BUILTIN_TYPES.number,
-//   spellCastings: TTRPGScriptCompiler.createArrayType(SpellCastingType),
-// });
-
-// // Create compiler with context
-// const compiler = new TTRPGScriptCompiler({
-//   characterState: CharacterStateType,
-//   casting: SpellCastingType,
-//   slot: SpellSlotType,
-// });
-
-// // Example 1: Dynamic list that returns Spell[]
-// const script1 = `
-// const filtered = characterState.spells.filter(s => s.level <= 3)
-// return filtered
-// `;
-
-// console.log('Example 1 - Filter spells:');
-// const result1 = compiler.compile(script1);
-// console.log('Return Type:', result1.returnType); // Should be "Spell[]" or "unknown[]"
-// console.log('Generated Code:', result1.code);
-// console.log('---\n');
-
-// // Example 2: Dynamic list with nested context
-// const script2 = `
-// const spells = casting.spells.filter(s => s.level == slot.level)
-// return spells
-// `;
-
-// console.log('Example 2 - Nested context:');
-// const result2 = compiler.compile(script2);
-// console.log('Return Type:', result2.returnType);
-// console.log('Generated Code:', result2.code);
-// console.log('---\n');
-
-// // Example 3: Complex logic with conditional returns
-// const script3 = `
-// if slot.current <= 0 {
-//   return null
-// }
-
-// const availableSpells = casting.spells.filter(s => s.level == slot.level)
-// return availableSpells
-// `;
-
-// console.log('Example 3 - Conditional return:');
-// const result3 = compiler.compile(script3);
-// console.log('Return Type:', result3.returnType); // Should be "Spell[] | null"
-// console.log('Generated Code:', result3.code);
-// console.log('---\n');
-
-// // Example 4: Function with return type inference
-// const script4 = `
-// fn getSpellsForLevel(castingName, level) {
-//   const casting = characterState.spellCastings.find(c => c.name == castingName)
-//   if casting == null {
-//     return []
-//   }
-//   return casting.spells.filter(s => s.level <= level)
-// }
-
-// return getSpellsForLevel("Cleric", 3)
-// `;
-
-// console.log('Example 4 - Function with inference:');
-// const result4 = compiler.compile(script4);
-// console.log('Return Type:', result4.returnType);
-// console.log('Generated Code:', result4.code);
-// console.log('---\n');

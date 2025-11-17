@@ -1,17 +1,19 @@
 // ============================================================================
-// TYPE SYSTEM
+// TYPE SYSTEM with Async/Await Support
 // ============================================================================
 
-import { ProgramNode, ASTNode, VariableDeclarationNode, FunctionDeclarationNode, IfStatementNode, ForStatementNode, LiteralNode, IdentifierNode, BinaryExpressionNode, UnaryExpressionNode, CallExpressionNode, MemberExpressionNode, ArrayExpressionNode, ObjectExpressionNode, ConditionalExpressionNode, ArrowFunctionNode, InterfaceDeclarationNode, TypeAnnotation, TypeDeclarationNode } from "./ast";
+import { ProgramNode, ASTNode, VariableDeclarationNode, FunctionDeclarationNode, IfStatementNode, ForStatementNode, LiteralNode, IdentifierNode, BinaryExpressionNode, UnaryExpressionNode, CallExpressionNode, MemberExpressionNode, ArrayExpressionNode, ObjectExpressionNode, ConditionalExpressionNode, ArrowFunctionNode, InterfaceDeclarationNode, TypeAnnotation, TypeDeclarationNode, AwaitExpressionNode } from "./ast";
 
 export interface Type {
-  kind: 'primitive' | 'array' | 'object' | 'function' | 'union' | 'unknown';
+  kind: 'primitive' | 'array' | 'object' | 'function' | 'union' | 'promise' | 'unknown';
   name?: string;
   elementType?: Type;
   properties?: Record<string, Type>;
   parameters?: Type[];
   returnType?: Type;
   types?: Type[]; // for union types
+  resolveType?: Type; // for promise types
+  async?: boolean; // for function types
 }
 
 export const BUILTIN_TYPES = {
@@ -29,6 +31,7 @@ export const BUILTIN_TYPES = {
 export class TypeChecker {
   private symbolTable = new Map<string, Type>();
   private customTypes = new Map<string, Type>();
+  private currentFunctionIsAsync = false; // Track if we're in an async function
   
   constructor(contextTypes?: Record<string, Type>) {
     if (contextTypes) {
@@ -40,6 +43,17 @@ export class TypeChecker {
   
   registerType(name: string, type: Type) {
     this.customTypes.set(name, type);
+  }
+
+  registerFunction(name: string, params: Type[], returnType: Type, isAsync: boolean = false) {
+    const funcType: Type = {
+      kind: 'function',
+      parameters: params,
+      returnType,
+      async: isAsync,
+    };
+    
+    this.symbolTable.set(name, funcType);
   }
   
   check(ast: ProgramNode): Type {
@@ -156,6 +170,12 @@ export class TypeChecker {
       case 'TypeReference':
         return this.customTypes.get(annotation.name) || BUILTIN_TYPES.unknown;
       
+      case 'PromiseType':
+        return {
+          kind: 'promise',
+          resolveType: this.annotationToType(annotation.resolveType)
+        };
+      
       default:
         return BUILTIN_TYPES.unknown;
     }
@@ -183,6 +203,8 @@ export class TypeChecker {
   private checkFunctionDeclaration(node: FunctionDeclarationNode): Type {
     // Create new scope for function
     const savedSymbols = new Map(this.symbolTable);
+    const savedAsync = this.currentFunctionIsAsync;
+    this.currentFunctionIsAsync = node.async;
     
     // Add parameters to scope with their types
     const paramTypes: Type[] = [];
@@ -207,13 +229,17 @@ export class TypeChecker {
       ? (returnTypes.length === 1 ? returnTypes[0] : { kind: 'union' as const, types: returnTypes })
       : BUILTIN_TYPES.unknown;
     
+    // If async function, wrap return type in Promise
+    let returnType = node.async && inferredReturnType.kind !== 'promise'
+      ? { kind: 'promise' as const, resolveType: inferredReturnType }
+      : inferredReturnType;
+    
     // If return type annotation exists, check compatibility
-    let returnType = inferredReturnType;
     if (node.returnTypeAnnotation) {
       const declaredReturnType = this.annotationToType(node.returnTypeAnnotation);
-      if (!this.isAssignable(inferredReturnType, declaredReturnType)) {
+      if (!this.isAssignable(returnType, declaredReturnType)) {
         throw new TypeError(
-          `Function ${node.name} returns ${this.typeToString(inferredReturnType)} but declared ${this.typeToString(declaredReturnType)}`
+          `Function ${node.name} returns ${this.typeToString(returnType)} but declared ${this.typeToString(declaredReturnType)}`
         );
       }
       returnType = declaredReturnType;
@@ -221,11 +247,13 @@ export class TypeChecker {
     
     // Restore scope
     this.symbolTable = savedSymbols;
+    this.currentFunctionIsAsync = savedAsync;
     
     const funcType: Type = {
       kind: 'function',
       parameters: paramTypes,
       returnType,
+      async: node.async,
     };
     
     this.symbolTable.set(node.name, funcType);
@@ -245,12 +273,17 @@ export class TypeChecker {
     
     // Union type checking
     if (target.kind === 'union') {
-      return target.types!.some(t => this.isAssignable(t, source));
+      return target.types!.some(t => this.isAssignable(source, t));
     }
     
     // Array covariance
     if (source.kind === 'array' && target.kind === 'array') {
       return this.isAssignable(source.elementType!, target.elementType!);
+    }
+    
+    // Promise covariance
+    if (source.kind === 'promise' && target.kind === 'promise') {
+      return this.isAssignable(source.resolveType!, target.resolveType!);
     }
     
     // Structural typing for objects
@@ -291,8 +324,17 @@ export class TypeChecker {
     
     // Infer item type from iterable
     let itemType: Type = BUILTIN_TYPES.unknown;
-    if (iterableType.kind === 'array' && iterableType.elementType) {
+    
+    // For await...of, unwrap promise of array
+    if (node.async && iterableType.kind === 'promise' && iterableType.resolveType?.kind === 'array') {
+      if (!this.currentFunctionIsAsync) {
+        throw new TypeError('await can only be used in async functions');
+      }
+      itemType = iterableType.resolveType.elementType!;
+    } else if (iterableType.kind === 'array' && iterableType.elementType) {
       itemType = iterableType.elementType;
+    } else if (node.async) {
+      throw new TypeError('for await...of requires an async iterable (Promise<T[]>)');
     }
     
     // Add loop variable to symbol table
@@ -303,8 +345,7 @@ export class TypeChecker {
       lastType = this.checkStatement(stmt);
     }
     
-    // Restore symbol table but keep any variables declared inside the loop
-    // that might be used after (this is a simplification)
+    // Restore symbol table
     this.symbolTable = savedSymbols;
     return lastType;
   }
@@ -331,6 +372,8 @@ export class TypeChecker {
         return this.inferConditionalExpression(node);
       case 'ArrowFunction':
         return this.inferArrowFunction(node);
+      case 'AwaitExpression':
+        return this.inferAwaitExpression(node);
       case 'AssignmentExpression':
         // For assignments, update symbol table and return the value type
         const valueType = this.inferExpression(node.value);
@@ -341,6 +384,22 @@ export class TypeChecker {
       default:
         return BUILTIN_TYPES.unknown;
     }
+  }
+  
+  private inferAwaitExpression(node: AwaitExpressionNode): Type {
+    if (!this.currentFunctionIsAsync) {
+      throw new TypeError('await can only be used in async functions');
+    }
+    
+    const argType = this.inferExpression(node.argument);
+    
+    // If it's a promise, unwrap it
+    if (argType.kind === 'promise' && argType.resolveType) {
+      return argType.resolveType;
+    }
+    
+    // If it's not a promise, await still returns the value
+    return argType;
   }
   
   private inferLiteral(node: LiteralNode): Type {
@@ -489,19 +548,28 @@ export class TypeChecker {
   
   private inferArrowFunction(node: ArrowFunctionNode): Type {
     const savedSymbols = new Map(this.symbolTable);
+    const savedAsync = this.currentFunctionIsAsync;
+    this.currentFunctionIsAsync = node.async;
     
     for (const param of node.params) {
       this.symbolTable.set(param, BUILTIN_TYPES.unknown);
     }
     
-    const returnType = this.inferExpression(node.body);
+    let returnType = this.inferExpression(node.body);
+    
+    // If async arrow function and return type is not a promise, wrap it
+    if (node.async && returnType.kind !== 'promise') {
+      returnType = { kind: 'promise', resolveType: returnType };
+    }
     
     this.symbolTable = savedSymbols;
+    this.currentFunctionIsAsync = savedAsync;
     
     return {
       kind: 'function',
       parameters: node.params.map(() => BUILTIN_TYPES.unknown),
       returnType,
+      async: node.async,
     };
   }
   
@@ -513,6 +581,9 @@ export class TypeChecker {
     if (a.kind === 'array' && b.kind === 'array') {
       return this.typesEqual(a.elementType!, b.elementType!);
     }
+    if (a.kind === 'promise' && b.kind === 'promise') {
+      return this.typesEqual(a.resolveType!, b.resolveType!);
+    }
     return false;
   }
   
@@ -522,6 +593,8 @@ export class TypeChecker {
         return type.name || 'unknown';
       case 'array':
         return `${this.typeToString(type.elementType!)}[]`;
+      case 'promise':
+        return `Promise<${this.typeToString(type.resolveType!)}>`;
       case 'object':
         if (type.name) return type.name;
         const props = Object.entries(type.properties || {})
@@ -530,7 +603,8 @@ export class TypeChecker {
         return `{ ${props} }`;
       case 'function':
         const params = (type.parameters || []).map(p => this.typeToString(p)).join(', ');
-        return `(${params}) => ${this.typeToString(type.returnType!)}`;
+        const asyncPrefix = type.async ? 'async ' : '';
+        return `${asyncPrefix}(${params}) => ${this.typeToString(type.returnType!)}`;
       case 'union':
         return (type.types || []).map(t => this.typeToString(t)).join(' | ');
       case 'unknown':

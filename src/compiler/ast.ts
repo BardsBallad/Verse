@@ -28,7 +28,8 @@ export type ASTNode =
   | LiteralNode
   | ConditionalExpressionNode
   | ArrowFunctionNode
-  | AssignmentExpressionNode;
+  | AssignmentExpressionNode
+  | AwaitExpressionNode;
 
 // ============================================================================
 // Statement Nodes
@@ -65,6 +66,7 @@ export interface FunctionDeclarationNode extends BaseNode {
   params: { name: string; typeAnnotation?: TypeAnnotation }[];
   returnTypeAnnotation?: TypeAnnotation;
   body: ASTNode[];
+  async: boolean;
 }
 
 export interface ReturnStatementNode extends BaseNode {
@@ -84,6 +86,7 @@ export interface ForStatementNode extends BaseNode {
   variable: string;
   iterable: ASTNode;
   body: ASTNode[];
+  async: boolean;
 }
 
 export interface ExpressionStatementNode extends BaseNode {
@@ -152,12 +155,18 @@ export interface ArrowFunctionNode extends BaseNode {
   type: 'ArrowFunction';
   params: string[];
   body: ASTNode;
+  async: boolean;
 }
 
 export interface AssignmentExpressionNode extends BaseNode {
   type: 'AssignmentExpression';
   target: ASTNode;
   value: ASTNode;
+}
+
+export interface AwaitExpressionNode extends BaseNode {
+  type: 'AwaitExpression';
+  argument: ASTNode;
 }
 
 // ============================================================================
@@ -169,7 +178,8 @@ export type TypeAnnotation =
   | ArrayTypeAnnotation
   | ObjectTypeAnnotation
   | UnionTypeAnnotation
-  | TypeReferenceAnnotation;
+  | TypeReferenceAnnotation
+  | PromiseTypeAnnotation;
 
 export interface PrimitiveTypeAnnotation {
   type: 'PrimitiveType';
@@ -194,6 +204,11 @@ export interface UnionTypeAnnotation {
 export interface TypeReferenceAnnotation {
   type: 'TypeReference';
   name: string;
+}
+
+export interface PromiseTypeAnnotation {
+  type: 'PromiseType';
+  resolveType: TypeAnnotation;
 }
 
 // ============================================================================
@@ -276,6 +291,10 @@ export function isAssignmentExpression(node: ASTNode): node is AssignmentExpress
   return node.type === 'AssignmentExpression';
 }
 
+export function isAwaitExpression(node: ASTNode): node is AwaitExpressionNode {
+  return node.type === 'AwaitExpression';
+}
+
 // ============================================================================
 // AST Visitor Pattern (Optional utility for traversing AST)
 // ============================================================================
@@ -301,6 +320,7 @@ export interface ASTVisitor {
   visitConditionalExpression?(node: ConditionalExpressionNode): void;
   visitArrowFunction?(node: ArrowFunctionNode): void;
   visitAssignmentExpression?(node: AssignmentExpressionNode): void;
+  visitAwaitExpression?(node: AwaitExpressionNode): void;
 }
 
 export function visitNode(node: ASTNode, visitor: ASTVisitor): void {
@@ -388,6 +408,10 @@ export function visitNode(node: ASTNode, visitor: ASTVisitor): void {
       visitor.visitAssignmentExpression?.(node);
       visitNode(node.target, visitor);
       visitNode(node.value, visitor);
+      break;
+    case 'AwaitExpression':
+      visitor.visitAwaitExpression?.(node);
+      visitNode(node.argument, visitor);
       break;
   }
 }

@@ -1,5 +1,5 @@
 // ============================================================================
-// PARSER - Builds AST from tokens
+// PARSER - Builds AST from tokens with Async/Await support
 // ============================================================================
 
 import { ProgramNode, ASTNode, TypeDeclarationNode, InterfaceDeclarationNode, TypeAnnotation, VariableDeclarationNode, FunctionDeclarationNode, ReturnStatementNode, IfStatementNode, ForStatementNode, ExpressionStatementNode } from './ast';
@@ -40,8 +40,16 @@ export class Parser {
       return this.variableDeclaration();
     }
     
+    // Check for async function
+    if (this.match(TokenType.ASYNC)) {
+      if (this.match(TokenType.FN)) {
+        return this.functionDeclaration(true);
+      }
+      throw new Error('Expected "fn" after "async"');
+    }
+    
     if (this.match(TokenType.FN)) {
-      return this.functionDeclaration();
+      return this.functionDeclaration(false);
     }
     
     if (this.match(TokenType.RETURN)) {
@@ -102,7 +110,7 @@ export class Parser {
     return { type: 'VariableDeclaration', identifier, value, constant, typeAnnotation };
   }
   
-  private functionDeclaration(): FunctionDeclarationNode {
+  private functionDeclaration(isAsync: boolean): FunctionDeclarationNode {
     const name = this.consume(TokenType.IDENTIFIER, 'Expected function name').value;
     this.consume(TokenType.LPAREN, 'Expected ( after function name');
     
@@ -138,7 +146,7 @@ export class Parser {
     
     this.consume(TokenType.RBRACE, 'Expected } after function body');
     
-    return { type: 'FunctionDeclaration', name, params, returnTypeAnnotation, body };
+    return { type: 'FunctionDeclaration', name, params, returnTypeAnnotation, body, async: isAsync };
   }
   
   private returnStatement(): ReturnStatementNode {
@@ -171,6 +179,9 @@ export class Parser {
   }
   
   private forStatement(): ForStatementNode {
+    // Check for "await" keyword (for await...of)
+    const isAwait = this.match(TokenType.AWAIT);
+    
     const variable = this.consume(TokenType.IDENTIFIER, 'Expected variable name in for loop').value;
     this.consume(TokenType.IN, 'Expected "in" in for loop');
     const iterable = this.expression();
@@ -183,7 +194,7 @@ export class Parser {
     
     this.consume(TokenType.RBRACE, 'Expected } after for body');
     
-    return { type: 'ForStatement', variable, iterable, body };
+    return { type: 'ForStatement', variable, iterable, body, async: isAwait };
   }
   
   private expressionStatement(): ExpressionStatementNode {
@@ -196,6 +207,15 @@ export class Parser {
   // ============================================================================
   
   private parseTypeAnnotation(): TypeAnnotation {
+    // Check for Promise<T> syntax
+    if (this.check(TokenType.IDENTIFIER) && this.peek().value === 'Promise') {
+      this.advance();
+      this.consume(TokenType.LESS, 'Expected < after Promise');
+      const resolveType = this.parseTypeAnnotation();
+      this.consume(TokenType.GREATER, 'Expected > after Promise type');
+      return { type: 'PromiseType', resolveType };
+    }
+    
     // Union type: number | string | null
     const types: TypeAnnotation[] = [];
     
@@ -241,7 +261,7 @@ export class Parser {
       }
     }
 
-    // nulll gets matched as a token since it's also a value
+    // null gets matched as a token since it's also a value
     if (token.type === TokenType.NULL) {
       this.advance();
       return { 
@@ -387,6 +407,12 @@ export class Parser {
       return { type: 'UnaryExpression', operator, operand };
     }
     
+    // NEW: Handle await expression
+    if (this.match(TokenType.AWAIT)) {
+      const argument = this.unary();
+      return { type: 'AwaitExpression', argument };
+    }
+    
     return this.call();
   }
   
@@ -461,13 +487,40 @@ export class Parser {
       return { type: 'Literal', value: this.previous().value };
     }
     
+    // Check for async arrow function
+    if (this.match(TokenType.ASYNC)) {
+      if (this.check(TokenType.IDENTIFIER)) {
+        const name = this.advance().value;
+        if (this.match(TokenType.FAT_ARROW)) {
+          const body = this.expression();
+          return { type: 'ArrowFunction', params: [name], body, async: true };
+        }
+        throw new Error('Expected => after async parameter');
+      }
+      
+      if (this.match(TokenType.LPAREN)) {
+        const params: string[] = [];
+        if (!this.check(TokenType.RPAREN)) {
+          do {
+            params.push(this.consume(TokenType.IDENTIFIER, 'Expected parameter').value);
+          } while (this.match(TokenType.COMMA));
+        }
+        this.consume(TokenType.RPAREN, 'Expected ) after parameters');
+        this.consume(TokenType.FAT_ARROW, 'Expected => after async parameters');
+        const body = this.expression();
+        return { type: 'ArrowFunction', params, body, async: true };
+      }
+      
+      throw new Error('Expected identifier or ( after async');
+    }
+    
     if (this.match(TokenType.IDENTIFIER)) {
       const name = this.previous().value;
       
       // Arrow function: x => expr
       if (this.match(TokenType.FAT_ARROW)) {
         const body = this.expression();
-        return { type: 'ArrowFunction', params: [name], body };
+        return { type: 'ArrowFunction', params: [name], body, async: false };
       }
       
       return { type: 'Identifier', name };
@@ -491,7 +544,7 @@ export class Parser {
       
       if (this.match(TokenType.RPAREN) && this.match(TokenType.FAT_ARROW)) {
         const body = this.expression();
-        return { type: 'ArrowFunction', params, body };
+        return { type: 'ArrowFunction', params, body, async: false };
       }
       
       // Not an arrow function, backtrack and parse as grouped expression
@@ -574,38 +627,3 @@ export class Parser {
     throw new Error(`${message} at line ${this.peek().line}, got ${this.peek().type}`);
   }
 }
-
-// ============================================================================
-// Example Usage
-// ============================================================================
-
-/*
-import { Lexer } from './lexer';
-import { Parser } from './parser';
-
-const source = `
-type SpellLevel = number
-
-interface Spell {
-  name: string,
-  level: SpellLevel,
-  damage: string | null
-}
-
-fn getSpells(maxLevel: number) -> Spell[] {
-  const filtered: Spell[] = casting.spells.filter(s => s.level <= maxLevel)
-  return filtered
-}
-
-const result: Spell[] = getSpells(3)
-return result
-`;
-
-const lexer = new Lexer(source);
-const tokens = lexer.tokenize();
-
-const parser = new Parser(tokens);
-const ast = parser.parse();
-
-console.log(JSON.stringify(ast, null, 2));
-*/

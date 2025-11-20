@@ -54,7 +54,7 @@ export class VerseScriptCompiler {
           try {
             const t = this.typeChecker.inferExpression(anyNode);
             if (t && t.kind === 'object' && t.name) {
-              (anyNode as Record<string, unknown>).__inferredTypeName = t.name;
+              (anyNode as unknown as Record<string, unknown>).__inferredTypeName = t.name;
             }
           } catch (e) {
             // ignore inference errors for inline annotation

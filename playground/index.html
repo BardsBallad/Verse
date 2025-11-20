@@ -56,6 +56,16 @@
             <div class="result-label">Execution Result</div>
             <div class="result-value" id="resultValue"></div>
           </div>
+
+          <div class="globals-panel">
+            <div class="type-info-label">Globals</div>
+            <textarea id="globalsJson" rows="10">{}</textarea>
+            <div class="globals-controls">
+              <label>Getter name: <input id="globalGetName" value="getValue"></label>
+              <label>Setter name: <input id="globalSetName" value="setValue"></label>
+              <button id="applyGlobalsBtn">Apply Globals</button>
+            </div>
+          </div>
         </div>
       </div>
 

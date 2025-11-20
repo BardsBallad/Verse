@@ -6,6 +6,7 @@ import { CodeGenerator } from "./code-generator";
 import { Lexer } from "./lexer";
 import { Parser } from "./parser";
 import { TypeChecker, Type } from "./type-checker";
+import type { ASTNode } from './ast';
 export interface CompileResult {
   success: boolean;
   returnType?: string;
@@ -15,9 +16,11 @@ export interface CompileResult {
 
 export class VerseScriptCompiler {
   private typeChecker: TypeChecker;
+  private codeGenOptions?: { globalGet?: string; globalSet?: string };
   
-  constructor(contextTypes?: Record<string, Type>) {
+  constructor(contextTypes?: Record<string, Type>, codeGenOptions?: { globalGet?: string; globalSet?: string }) {
     this.typeChecker = new TypeChecker(contextTypes);
+    this.codeGenOptions = codeGenOptions;
   }
   
   registerType(name: string, type: Type) {
@@ -42,8 +45,36 @@ export class VerseScriptCompiler {
       const returnType = this.typeChecker.inferReturnType(ast);
       const returnTypeStr = this.typeChecker.typeToString(returnType);
       
-      // Code generation
-      const generator = new CodeGenerator();
+      // Annotate inline object expressions with inferred type name when possible
+      // so the code generator can inject `_type` for inline literals.
+      const annotate = (node: ASTNode | unknown) => {
+        if (!node || typeof node !== 'object') return;
+        const anyNode = node as ASTNode;
+        if (anyNode.type === 'ObjectExpression') {
+          try {
+            const t = this.typeChecker.inferExpression(anyNode);
+            if (t && t.kind === 'object' && t.name) {
+              (anyNode as Record<string, unknown>).__inferredTypeName = t.name;
+            }
+          } catch (e) {
+            // ignore inference errors for inline annotation
+          }
+        }
+        // recurse
+        for (const key of Object.keys(node as Record<string, unknown>)) {
+          const child = (node as Record<string, unknown>)[key];
+          if (Array.isArray(child)) {
+            child.forEach(c => annotate(c));
+          } else if (child && typeof child === 'object') {
+            annotate(child);
+          }
+        }
+      };
+
+      annotate(ast);
+      
+      // Code generation (pass through code generator options if provided)
+      const generator = new CodeGenerator(this.codeGenOptions);
       const code = generator.generate(ast);
       
       return {
@@ -51,10 +82,11 @@ export class VerseScriptCompiler {
         returnType: returnTypeStr,
         code,
       };
-    } catch (error: any) {
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        error: error.message,
+        error: msg,
       };
     }
   }

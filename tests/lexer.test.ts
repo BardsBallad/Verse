@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Lexer, TokenType } from '../src/compiler/lexer';
+import { Lexer, TokenType, Token } from '../src/compiler/lexer';
 
 describe('Lexer', () => {
   it('should tokenize numbers', () => {
@@ -56,7 +56,7 @@ describe('Lexer', () => {
     const tokens = lexer.tokenize();
     
     // Should skip the comment
-    const identifiers = tokens.filter((t: any) => t.type === TokenType.IDENTIFIER);
+    const identifiers = tokens.filter((t: Token) => t.type === TokenType.IDENTIFIER);
     expect(identifiers.length).toBe(2);
     expect(identifiers[0].value).toBe('x');
     expect(identifiers[1].value).toBe('y');

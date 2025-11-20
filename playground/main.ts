@@ -4,7 +4,7 @@
 import * as monaco from 'monaco-editor';
 // @ts-expect-error this file does exist.
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import { VerseScriptCompiler } from '../src';
+import { VerseScriptCompiler, CompileResult } from '../src';
 
 import { Scope } from 'quickjs-emscripten'
 import { load } from './quick';
@@ -18,7 +18,7 @@ self.MonacoEnvironment = {
 };
 
 // Sample context data
-const sampleContext = {
+const sampleContext: Record<string, unknown> = {
   characterState: {
     hp: 45,
     maxHp: 60,
@@ -179,14 +179,65 @@ const CharacterStateType = VerseScriptCompiler.createObjectType('CharacterState'
   spellCastings: VerseScriptCompiler.createArrayType(SpellCastingType),
 });
 
-// Create compiler
-const compiler = new VerseScriptCompiler({
+// Helper for required elements (throws if not present)
+function getRequiredEl<T extends HTMLElement = HTMLElement>(id: string): T {
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`Missing element #${id}`);
+  return el as T;
+}
+
+// Initialize playground globals UI values
+const globalsTextarea = document.getElementById('globalsJson') as HTMLTextAreaElement | null;
+const globalGetInput = document.getElementById('globalGetName') as HTMLInputElement | null;
+const globalSetInput = document.getElementById('globalSetName') as HTMLInputElement | null;
+
+if (globalsTextarea) globalsTextarea.value = JSON.stringify(sampleContext, null, 2);
+if (globalGetInput) globalGetInput.value = 'getValue';
+if (globalSetInput) globalSetInput.value = 'setValue';
+
+// Create compiler with generator global hooks from UI (use defaults if inputs not present)
+const initialGet = globalGetInput ? globalGetInput.value : 'getValue';
+const initialSet = globalSetInput ? globalSetInput.value : 'setValue';
+let compiler = new VerseScriptCompiler({
   characterState: CharacterStateType,
   casting: SpellCastingType,
   slot: SpellSlotType,
-});
+}, { globalGet: initialGet, globalSet: initialSet });
 
-compiler.registerType('spell', SpellType)
+compiler.registerType('spell', SpellType);
+
+// Apply globals button wiring (recreate compiler if getter/setter names changed)
+const applyBtn = document.getElementById('applyGlobalsBtn');
+if (applyBtn) {
+  applyBtn.addEventListener('click', () => {
+      try {
+        if (globalsTextarea) {
+          const parsed = JSON.parse(globalsTextarea.value) as Record<string, unknown>;
+          // update sampleContext in-place
+          Object.keys(sampleContext).forEach(k => delete sampleContext[k]);
+          Object.assign(sampleContext, parsed);
+        }
+
+        const newGet = globalGetInput ? globalGetInput.value : 'getValue';
+        const newSet = globalSetInput ? globalSetInput.value : 'setValue';
+
+        // recreate compiler with new options so generated code uses updated function names
+        compiler = new VerseScriptCompiler({
+          characterState: CharacterStateType,
+          casting: SpellCastingType,
+          slot: SpellSlotType,
+        }, { globalGet: newGet, globalSet: newSet });
+
+        compiler.registerType('spell', SpellType);
+
+        // recompile to update compiled code preview
+        compileAndAnalyze();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        alert('Invalid globals JSON: ' + msg);
+      }
+  });
+}
 
 // Register custom language
 monaco.languages.register({ id: 'verse' });
@@ -510,7 +561,8 @@ monaco.editor.defineTheme('verse-dark', {
 });
 
 // Create editor
-const editor = monaco.editor.create(document.getElementById('editor')!, {
+const editorEl = getRequiredEl('editor');
+const editor = monaco.editor.create(editorEl, {
   value: examples[0].code,
   language: 'verse',
   theme: 'verse-dark',
@@ -523,7 +575,7 @@ const editor = monaco.editor.create(document.getElementById('editor')!, {
   padding: { top: 10, bottom: 10 }
 });
 
-let currentCompileResult: any = null;
+let currentCompileResult: CompileResult | null = null;
 
 // Compile on change
 let compileTimeout: NodeJS.Timeout;
@@ -541,9 +593,9 @@ function compileAndAnalyze() {
     const result = compiler.compile(code);
     currentCompileResult = result;
     
-    const typeInfoEl = document.getElementById('typeInfo')!;
-    const compiledCodeEl = document.getElementById('compiledCode')!;
-    const statusIndicator = document.getElementById('statusIndicator')!;
+    const typeInfoEl = getRequiredEl('typeInfo');
+    const compiledCodeEl = getRequiredEl('compiledCode');
+    const statusIndicator = getRequiredEl('statusIndicator');
     
     if (result.success) {
       typeInfoEl.className = 'type-info success';
@@ -551,7 +603,7 @@ function compileAndAnalyze() {
         <div class="type-info-label">Return Type</div>
         <div class="type-info-value">${result.returnType}</div>
       `;
-      compiledCodeEl.textContent = result.code!;
+      compiledCodeEl.textContent = result.code ?? '';
       statusIndicator.innerHTML = '<span class="status-indicator status-success"></span>';
     } else {
       typeInfoEl.className = 'type-info error';
@@ -562,18 +614,19 @@ function compileAndAnalyze() {
       compiledCodeEl.textContent = '// Error during compilation';
       statusIndicator.innerHTML = '<span class="status-indicator status-error"></span>';
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Compilation error:', error);
   }
 }
 
 
 // Run button
-document.getElementById('runBtn')!.addEventListener('click', async () => {
+getRequiredEl('runBtn').addEventListener('click', async () => {
   if (!currentCompileResult || !currentCompileResult.success) {
     alert('Fix compilation errors before running');
     return;
   }
+  const compileResult = currentCompileResult as CompileResult;
   
   try {
     const QuickJS = await load()
@@ -581,15 +634,37 @@ document.getElementById('runBtn')!.addEventListener('click', async () => {
     Scope.withScope((scope) => {
       const vm = scope.manage(QuickJS.newContext())
 
+      // Build runtime globals and helper functions inside the VM. Use the
+      // playground UI names for getter/setter if provided.
+      const getName = (globalGetInput && globalGetInput.value) ? globalGetInput.value : 'getValue';
+      const setName = (globalSetInput && globalSetInput.value) ? globalSetInput.value : 'setValue';
+
+      // Create JS code to initialize globals from sampleContext
+      const globalsObj = sampleContext;
+      const globalsInit = Object.keys(globalsObj).map(k => `var ${k} = ${JSON.stringify(globalsObj[k])};`).join('\n');
+
+      const helperCode = `
+function ${getName}(path) {
+  try { return eval(path); } catch(e) { return undefined; }
+}
+
+function ${setName}(path, value) {
+  try {
+    // Assign using a Function so that 'value' is available in the assignment scope
+    const fn = new Function('v', \`\${path} = v; return v;\`);
+    return fn(value);
+  } catch (e) { throw e; }
+}
+`;
+
       const result = scope.manage(
         vm.unwrapResult(
           vm.evalCode(`
-            let character = ${JSON.stringify(sampleContext.characterState)};
-            let casting = ${JSON.stringify(sampleContext.casting)};
-            let slot = ${JSON.stringify(sampleContext.slot)};
+            ${globalsInit}
+            ${helperCode}
 
             function main() {
-              ${currentCompileResult.code}
+              ${compileResult.code}
             }
 
             main()
@@ -603,31 +678,32 @@ document.getElementById('runBtn')!.addEventListener('click', async () => {
       // When the withScope block exits, it calls scope.dispose(), which in turn calls
       // the .dispose() methods of all the disposables managed by the scope.
 
-      const resultEl = document.getElementById('executionResult')!;
-      const resultValueEl = document.getElementById('resultValue')!;
+      const resultEl = getRequiredEl('executionResult');
+      const resultValueEl = getRequiredEl('resultValue');
       
       resultEl.style.display = 'block';
       resultValueEl.textContent = JSON.stringify(returnedValue, null, 2);
       
-      const consoleEl = document.getElementById('consoleOutput')!;
+      const consoleEl = getRequiredEl('consoleOutput');
       consoleEl.textContent = `Execution successful!\n\nResult:\n${JSON.stringify(returnedValue, null, 2)}`;
     })
-  } catch (error: any) {
-    alert('Execution error: ' + error.message);
-    const consoleEl = document.getElementById('consoleOutput')!;
-    consoleEl.textContent = `Error: ${error.message}`;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    alert('Execution error: ' + msg);
+    const consoleEl = getRequiredEl('consoleOutput');
+    consoleEl.textContent = `Error: ${msg}`;
   }
 });
 
 // Format button
-document.getElementById('formatBtn')!.addEventListener('click', () => {
+getRequiredEl('formatBtn').addEventListener('click', () => {
   const code = editor.getValue();
   const formatted = code.trim();
   editor.setValue(formatted);
 });
 
 // Load examples
-const examplesContainer = document.getElementById('examples')!;
+const examplesContainer = getRequiredEl('examples');
 examples.forEach((example) => {
   const btn = document.createElement('button');
   btn.className = 'example-btn';
@@ -644,13 +720,15 @@ examples.forEach((example) => {
 // Tab switching
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
-    const tabName = (tab as HTMLElement).dataset.tab!;
-    
+    const tabName = (tab as HTMLElement).dataset.tab;
+    if (!tabName) return;
+
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    
+
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    document.querySelector(`.tab-content[data-tab="${tabName}"]`)!.classList.add('active');
+    const content = document.querySelector(`.tab-content[data-tab="${tabName}"]`) as HTMLElement | null;
+    if (content) content.classList.add('active');
   });
 });
 

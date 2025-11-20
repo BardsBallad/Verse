@@ -103,7 +103,9 @@ export class TypeChecker {
     collectReturns(ast.body);
     
     if (returnTypes.length === 0) {
-      return BUILTIN_TYPES.unknown;
+      // If a script/function contains no `return` statements, treat its
+      // return type as `null` (explicitly no value) rather than `unknown`.
+      return BUILTIN_TYPES.null;
     }
     
     if (returnTypes.length === 1) {
@@ -276,9 +278,8 @@ export class TypeChecker {
     // If source is a union, it's assignable to target only if every
     // member of the union is assignable to the target.
     if (source.kind === 'union') {
-      // TODO: ignore null in this
-      // Spell should be assignable to Spell | null for example
-      return source.types!.every(s => this.isAssignable(s, target));
+      const members = source.types || [];
+      return members.every(s => this.isAssignable(s, target));
     }
 
     // Same type
@@ -293,17 +294,18 @@ export class TypeChecker {
     
     // Union type checking
     if (target.kind === 'union') {
-      return target.types!.some(t => this.isAssignable(source, t));
+      const members = target.types || [];
+      return members.some(t => this.isAssignable(source, t));
     }
     
     // Array covariance
     if (source.kind === 'array' && target.kind === 'array') {
-      return this.isAssignable(source.elementType!, target.elementType!);
+      return this.isAssignable(source.elementType || BUILTIN_TYPES.unknown, target.elementType || BUILTIN_TYPES.unknown);
     }
     
     // Promise covariance
     if (source.kind === 'promise' && target.kind === 'promise') {
-      return this.isAssignable(source.resolveType!, target.resolveType!);
+      return this.isAssignable(source.resolveType || BUILTIN_TYPES.unknown, target.resolveType || BUILTIN_TYPES.unknown);
     }
     
     // Structural typing for objects
@@ -350,7 +352,7 @@ export class TypeChecker {
       if (!this.currentFunctionIsAsync) {
         throw new TypeError('await can only be used in async functions');
       }
-      itemType = iterableType.resolveType.elementType!;
+      itemType = iterableType.resolveType?.elementType || BUILTIN_TYPES.unknown;
     } else if (iterableType.kind === 'array' && iterableType.elementType) {
       itemType = iterableType.elementType;
     } else if (node.async) {
@@ -644,10 +646,10 @@ export class TypeChecker {
       return a.name === b.name;
     }
     if (a.kind === 'array' && b.kind === 'array') {
-      return this.typesEqual(a.elementType!, b.elementType!);
+      return this.typesEqual(a.elementType || BUILTIN_TYPES.unknown, b.elementType || BUILTIN_TYPES.unknown);
     }
     if (a.kind === 'promise' && b.kind === 'promise') {
-      return this.typesEqual(a.resolveType!, b.resolveType!);
+      return this.typesEqual(a.resolveType || BUILTIN_TYPES.unknown, b.resolveType || BUILTIN_TYPES.unknown);
     }
     return false;
   }
@@ -657,9 +659,9 @@ export class TypeChecker {
       case 'primitive':
         return type.name || 'unknown';
       case 'array':
-        return `${this.typeToString(type.elementType!)}[]`;
+        return `${this.typeToString(type.elementType || BUILTIN_TYPES.unknown)}[]`;
       case 'promise':
-        return `Promise<${this.typeToString(type.resolveType!)}>`;
+        return `Promise<${this.typeToString(type.resolveType || BUILTIN_TYPES.unknown)}>`;
       case 'object':
         if (type.name) return type.name;
         const props = Object.entries(type.properties || {})
@@ -669,7 +671,7 @@ export class TypeChecker {
       case 'function':
         const params = (type.parameters || []).map(p => this.typeToString(p)).join(', ');
         const asyncPrefix = type.async ? 'async ' : '';
-        return `${asyncPrefix}(${params}) => ${this.typeToString(type.returnType!)}`;
+        return `${asyncPrefix}(${params}) => ${this.typeToString(type.returnType || BUILTIN_TYPES.unknown)}`;
       case 'union':
         return (type.types || []).map(t => this.typeToString(t)).join(' | ');
       case 'unknown':

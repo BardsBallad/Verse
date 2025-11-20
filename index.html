@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Verse Script Language Playground</title>
-  <script type="module" crossorigin src="/Verse/assets/index-BFAx04qu.js"></script>
+  <script type="module" crossorigin src="/Verse/assets/index-BqRwbzM9.js"></script>
   <link rel="modulepreload" crossorigin href="/Verse/assets/monaco-BOYU588y.js">
   <link rel="stylesheet" crossorigin href="/Verse/assets/monaco-CJWavACh.css">
-  <link rel="stylesheet" crossorigin href="/Verse/assets/index-B8uFxkEy.css">
+  <link rel="stylesheet" crossorigin href="/Verse/assets/index-BIiyY-Ws.css">
 </head>
 <body>
   <header>
@@ -58,6 +58,16 @@
           <div id="executionResult" class="execution-result" style="display: none;">
             <div class="result-label">Execution Result</div>
             <div class="result-value" id="resultValue"></div>
+          </div>
+
+          <div class="globals-panel">
+            <div class="type-info-label">Globals</div>
+            <textarea id="globalsJson" rows="10">{}</textarea>
+            <div class="globals-controls">
+              <label>Getter name: <input id="globalGetName" value="getValue"></label>
+              <label>Setter name: <input id="globalSetName" value="setValue"></label>
+              <button id="applyGlobalsBtn">Apply Globals</button>
+            </div>
           </div>
         </div>
       </div>

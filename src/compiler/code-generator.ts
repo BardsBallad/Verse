@@ -130,7 +130,7 @@ export class CodeGenerator {
           const me = callNode.callee as MemberExpressionNode;
           const basePath = this.buildPathFromMember(me.object);
           if (basePath && this.globalGet) {
-            const getterExpr = `${this.globalGet}(${JSON.stringify(basePath)})`;
+            const getterExpr = `${this.globalGet}(${basePath})`;
 
             // build access to method on the returned value
             let access = '';

@@ -109,7 +109,7 @@ export class CodeGenerator {
         // If identifier is not declared in any script scope, treat as global and
         // use configured global getter if provided.
         if (!this.isDeclared(node.name) && this.globalGet) {
-          return `${this.globalGet}(${JSON.stringify(node.name)})`;
+          return `await ${this.globalGet}(${JSON.stringify(node.name)})`;
         }
         return node.name;
       
@@ -148,7 +148,7 @@ export class CodeGenerator {
               access = `.${me.property}`;
             }
 
-            return `${getterExpr}${access}(${args})`;
+            return `(await ${getterExpr})${access}(${args})`;
           }
         }
 
@@ -161,7 +161,7 @@ export class CodeGenerator {
         // emit `getGlobal("path")` instead of dotted access.
         const maybePath = this.buildPathFromMember(node as MemberExpressionNode);
         if (maybePath && this.globalGet) {
-          return `${this.globalGet}(${JSON.stringify(maybePath)})`;
+          return `await ${this.globalGet}(${JSON.stringify(maybePath)})`;
         }
 
         const object = this.generateExpression(node.object);
@@ -208,7 +208,7 @@ export class CodeGenerator {
           if (node.target.type === 'Identifier') {
             const name = (node.target as IdentifierNode).name;
             if (!this.isDeclared(name) && this.globalSet) {
-              return `${this.globalSet}(${JSON.stringify(name)}, ${this.generateExpression(node.value)})`;
+              return `await ${this.globalSet}(${JSON.stringify(name)}, ${this.generateExpression(node.value)})`;
             }
           }
 
@@ -218,7 +218,7 @@ export class CodeGenerator {
           if (node.target.type === 'MemberExpression') {
             const path = this.buildPathFromMember(node.target);
             if (path && this.globalSet) {
-              return `${this.globalSet}(${JSON.stringify(path)}, ${this.generateExpression(node.value)})`;
+              return `await ${this.globalSet}(${JSON.stringify(path)}, ${this.generateExpression(node.value)})`;
             }
           }
 

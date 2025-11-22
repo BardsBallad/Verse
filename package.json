@@ -3,7 +3,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.2.42",
+  "version": "0.2.43",
   "description": "A custom typed scripting language for BardsBallad with Monaco editor integration",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

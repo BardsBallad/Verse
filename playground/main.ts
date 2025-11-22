@@ -19,10 +19,11 @@ self.MonacoEnvironment = {
 
 // Sample context data
 const sampleContext: Record<string, unknown> = {
-  characterState: {
+  character: {
     hp: 45,
     maxHp: 60,
     level: 5,
+    stats: [{name: "Strength", score: 10}],
     spellCastings: [
       {
         name: "Cleric",
@@ -641,20 +642,14 @@ getRequiredEl('runBtn').addEventListener('click', async () => {
 
       // Create JS code to initialize globals from sampleContext
       const globalsObj = sampleContext;
-      const globalsInit = Object.keys(globalsObj).map(k => `var ${k} = ${JSON.stringify(globalsObj[k])};`).join('\n');
+      const globalsInit = Object.keys(globalsObj).map(k => `var ${k} = ${JSON.stringify(globalsObj[k])}`).join('\n');
 
       const helperCode = `
-function ${getName}(path) {
-  try { return eval(path); } catch(e) { return undefined; }
+async function ${getName}(val) {
+  return val
 }
 
-function ${setName}(path, value) {
-  try {
-    // Assign using a Function so that 'value' is available in the assignment scope
-    const fn = new Function('v', \`\${path} = v; return v;\`);
-    return fn(value);
-  } catch (e) { throw e; }
-}
+function ${setName}(path, value) {}
 `;
 
       const result = scope.manage(
@@ -663,7 +658,9 @@ function ${setName}(path, value) {
             ${globalsInit}
             ${helperCode}
 
-            function main() {
+            const floor = Math.floor
+
+            async function main() {
               ${compileResult.code}
             }
 
@@ -672,7 +669,14 @@ function ${setName}(path, value) {
         )
       )
 
-      const returnedValue = vm.dump(result)
+      while (vm.runtime.hasPendingJob()) {
+        vm.runtime.executePendingJobs()
+      }
+
+      // Dump the result; if it's a pending Promise, drive the QuickJS job queue
+      // until the promise settles so we get the resolved value.
+      const returnedValue = vm.dump(result);
+
       // console.log("vm result:", vm.getNumber(nextId), "native state:", state)
 
       // When the withScope block exits, it calls scope.dispose(), which in turn calls

@@ -16,11 +16,9 @@ export interface CompileResult {
 
 export class VerseScriptCompiler {
   private typeChecker: TypeChecker;
-  private codeGenOptions?: { globalGet?: string; globalSet?: string };
   
-  constructor(contextTypes?: Record<string, Type>, codeGenOptions?: { globalGet?: string; globalSet?: string }) {
+  constructor(contextTypes?: Record<string, Type>) {
     this.typeChecker = new TypeChecker(contextTypes);
-    this.codeGenOptions = codeGenOptions;
   }
   
   registerType(name: string, type: Type) {
@@ -74,7 +72,7 @@ export class VerseScriptCompiler {
       annotate(ast);
       
       // Code generation (pass through code generator options if provided)
-      const generator = new CodeGenerator(this.codeGenOptions);
+      const generator = new CodeGenerator();
       const code = generator.generate(ast);
       
       return {

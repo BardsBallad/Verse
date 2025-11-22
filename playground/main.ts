@@ -197,13 +197,11 @@ if (globalGetInput) globalGetInput.value = 'getValue';
 if (globalSetInput) globalSetInput.value = 'setValue';
 
 // Create compiler with generator global hooks from UI (use defaults if inputs not present)
-const initialGet = globalGetInput ? globalGetInput.value : 'getValue';
-const initialSet = globalSetInput ? globalSetInput.value : 'setValue';
 let compiler = new VerseScriptCompiler({
   characterState: CharacterStateType,
   casting: SpellCastingType,
   slot: SpellSlotType,
-}, { globalGet: initialGet, globalSet: initialSet });
+});
 
 compiler.registerType('spell', SpellType);
 
@@ -219,15 +217,12 @@ if (applyBtn) {
           Object.assign(sampleContext, parsed);
         }
 
-        const newGet = globalGetInput ? globalGetInput.value : 'getValue';
-        const newSet = globalSetInput ? globalSetInput.value : 'setValue';
-
         // recreate compiler with new options so generated code uses updated function names
         compiler = new VerseScriptCompiler({
           characterState: CharacterStateType,
           casting: SpellCastingType,
           slot: SpellSlotType,
-        }, { globalGet: newGet, globalSet: newSet });
+        });
 
         compiler.registerType('spell', SpellType);
 
@@ -635,28 +630,14 @@ getRequiredEl('runBtn').addEventListener('click', async () => {
     Scope.withScope((scope) => {
       const vm = scope.manage(QuickJS.newContext())
 
-      // Build runtime globals and helper functions inside the VM. Use the
-      // playground UI names for getter/setter if provided.
-      const getName = (globalGetInput && globalGetInput.value) ? globalGetInput.value : 'getValue';
-      const setName = (globalSetInput && globalSetInput.value) ? globalSetInput.value : 'setValue';
-
       // Create JS code to initialize globals from sampleContext
       const globalsObj = sampleContext;
       const globalsInit = Object.keys(globalsObj).map(k => `var ${k} = ${JSON.stringify(globalsObj[k])}`).join('\n');
-
-      const helperCode = `
-async function ${getName}(val) {
-  return val
-}
-
-function ${setName}(path, value) {}
-`;
 
       const result = scope.manage(
         vm.unwrapResult(
           vm.evalCode(`
             ${globalsInit}
-            ${helperCode}
 
             const floor = Math.floor
 

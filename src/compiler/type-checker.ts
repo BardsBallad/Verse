@@ -565,8 +565,12 @@ export class TypeChecker {
       if (objectType.kind === 'object' && objectType.properties) {
         return objectType.properties[resolvedProp] || BUILTIN_TYPES.unknown;
       }
-      if (objectType.kind === 'array' && resolvedProp === 'length') {
-        return BUILTIN_TYPES.number;
+      if (objectType.kind === 'array') {
+        if (resolvedProp === 'length') {
+          return BUILTIN_TYPES.number;
+        }
+        const methodType = this.getArrayMethodType(resolvedProp, objectType.elementType);
+        if (methodType) return methodType;
       }
     }
 
@@ -678,6 +682,93 @@ export class TypeChecker {
         return 'unknown';
       default:
         return 'unknown';
+    }
+  }
+
+  private getArrayMethodType(methodName: string, elementType?: Type): Type | null {
+    switch (methodName) {
+      case 'filter':
+        // filter(callback: (element, index) => boolean): elementType[]
+        return {
+          kind: 'function',
+          parameters: [
+            {
+              kind: 'function',
+              parameters: [elementType || BUILTIN_TYPES.unknown, BUILTIN_TYPES.number],
+              returnType: BUILTIN_TYPES.boolean
+            }
+          ],
+          returnType: { kind: 'array', elementType: elementType || BUILTIN_TYPES.unknown }
+        };
+      case 'map':
+        // map<U>(callback: (element, index) => U): U[]
+        return {
+          kind: 'function',
+          parameters: [
+            {
+              kind: 'function',
+              parameters: [elementType || BUILTIN_TYPES.unknown, BUILTIN_TYPES.number],
+              returnType: BUILTIN_TYPES.unknown // Generic U
+            }
+          ],
+          returnType: { kind: 'array', elementType: BUILTIN_TYPES.unknown }
+        };
+      case 'find':
+        // find(callback: (element, index) => boolean): elementType | undefined
+        return {
+          kind: 'function',
+          parameters: [
+            {
+              kind: 'function',
+              parameters: [elementType || BUILTIN_TYPES.unknown, BUILTIN_TYPES.number],
+              returnType: BUILTIN_TYPES.boolean
+            }
+          ],
+          returnType: { kind: 'union', types: [elementType || BUILTIN_TYPES.unknown, BUILTIN_TYPES.unknown] }
+        };
+      case 'forEach':
+        // forEach(callback: (element, index) => void): void
+        return {
+          kind: 'function',
+          parameters: [
+            {
+              kind: 'function',
+              parameters: [elementType || BUILTIN_TYPES.unknown, BUILTIN_TYPES.number],
+              returnType: BUILTIN_TYPES.unknown
+            }
+          ],
+          returnType: BUILTIN_TYPES.unknown
+        };
+      case 'some':
+      case 'every':
+        // some/every(callback: (element, index) => boolean): boolean
+        return {
+          kind: 'function',
+          parameters: [
+            {
+              kind: 'function',
+              parameters: [elementType || BUILTIN_TYPES.unknown, BUILTIN_TYPES.number],
+              returnType: BUILTIN_TYPES.boolean
+            }
+          ],
+          returnType: BUILTIN_TYPES.boolean
+        };
+      case 'reduce':
+        // reduce(callback: (accumulator, element, index) => accumulator, initialValue?): accumulator
+        return {
+          kind: 'function',
+          parameters: [
+            {
+              kind: 'function',
+              parameters: [BUILTIN_TYPES.unknown, elementType || BUILTIN_TYPES.unknown, BUILTIN_TYPES.number],
+              returnType: BUILTIN_TYPES.unknown
+            },
+            BUILTIN_TYPES.unknown // initialValue
+          ],
+          returnType: BUILTIN_TYPES.unknown
+        };
+      default:
+        return null;
     }
   }
 }

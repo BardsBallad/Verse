@@ -4,11 +4,7 @@
 import * as monaco from 'monaco-editor';
 // @ts-expect-error this file does exist.
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import { VerseScriptCompiler, CompileResult } from '../src';
-
-import { Scope } from 'quickjs-emscripten'
-import { load } from './quick';
-import { BUILTIN_TYPES } from '../src/compiler/type-checker';
+import { Lexer, Parser, JSONCodeGenerator, JSONProcessor, Instruction, TypeChecker, BUILTIN_TYPES } from '../src';
 
 // Setup Monaco workers
 self.MonacoEnvironment = {
@@ -154,32 +150,6 @@ return hpPercent`
   }
 ];
 
-// Define TTRPG types
-const SpellType = VerseScriptCompiler.createObjectType('Spell', {
-  name: BUILTIN_TYPES.string,
-  level: BUILTIN_TYPES.number,
-  damage: BUILTIN_TYPES.string,
-});
-
-const SpellSlotType = VerseScriptCompiler.createObjectType('SpellSlot', {
-  level: BUILTIN_TYPES.number,
-  current: BUILTIN_TYPES.number,
-  max: BUILTIN_TYPES.number,
-});
-
-const SpellCastingType = VerseScriptCompiler.createObjectType('SpellCasting', {
-  name: BUILTIN_TYPES.string,
-  slots: VerseScriptCompiler.createArrayType(SpellSlotType),
-  spells: VerseScriptCompiler.createArrayType(SpellType),
-});
-
-const CharacterStateType = VerseScriptCompiler.createObjectType('CharacterState', {
-  hp: BUILTIN_TYPES.number,
-  maxHp: BUILTIN_TYPES.number,
-  level: BUILTIN_TYPES.number,
-  spellCastings: VerseScriptCompiler.createArrayType(SpellCastingType),
-});
-
 // Helper for required elements (throws if not present)
 function getRequiredEl<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -196,16 +166,19 @@ if (globalsTextarea) globalsTextarea.value = JSON.stringify(sampleContext, null,
 if (globalGetInput) globalGetInput.value = 'getValue';
 if (globalSetInput) globalSetInput.value = 'setValue';
 
-// Create compiler with generator global hooks from UI (use defaults if inputs not present)
-let compiler = new VerseScriptCompiler({
-  characterState: CharacterStateType,
-  casting: SpellCastingType,
-  slot: SpellSlotType,
-});
+// Create JSON code generator
+let generator = new JSONCodeGenerator();
 
-compiler.registerType('spell', SpellType);
+// Create type checker with context types
+const contextTypes: Record<string, any> = {
+  character: { kind: 'object', properties: { hp: BUILTIN_TYPES.number, maxHp: BUILTIN_TYPES.number, level: BUILTIN_TYPES.number } },
+  casting: { kind: 'object', properties: { name: BUILTIN_TYPES.string, slots: { kind: 'array', elementType: BUILTIN_TYPES.unknown }, spells: { kind: 'array', elementType: BUILTIN_TYPES.unknown } } },
+  slot: { kind: 'object', properties: { level: BUILTIN_TYPES.number, current: BUILTIN_TYPES.number, max: BUILTIN_TYPES.number } }
+};
 
-// Apply globals button wiring (recreate compiler if getter/setter names changed)
+let typeChecker = new TypeChecker(contextTypes);
+
+// Apply globals button wiring (recreate generator and type checker if context changed)
 const applyBtn = document.getElementById('applyGlobalsBtn');
 if (applyBtn) {
   applyBtn.addEventListener('click', () => {
@@ -217,14 +190,11 @@ if (applyBtn) {
           Object.assign(sampleContext, parsed);
         }
 
-        // recreate compiler with new options so generated code uses updated function names
-        compiler = new VerseScriptCompiler({
-          characterState: CharacterStateType,
-          casting: SpellCastingType,
-          slot: SpellSlotType,
-        });
+        // recreate generator (no special options needed for JSON generation)
+        generator = new JSONCodeGenerator();
 
-        compiler.registerType('spell', SpellType);
+        // recreate type checker with updated context
+        typeChecker = new TypeChecker(contextTypes);
 
         // recompile to update compiled code preview
         compileAndAnalyze();
@@ -571,7 +541,7 @@ const editor = monaco.editor.create(editorEl, {
   padding: { top: 10, bottom: 10 }
 });
 
-let currentCompileResult: CompileResult | null = null;
+let currentInstructions: Instruction[] | null = null;
 
 // Compile on change
 let compileTimeout: NodeJS.Timeout;
@@ -584,94 +554,81 @@ editor.onDidChangeModelContent(() => {
 
 function compileAndAnalyze() {
   const code = editor.getValue();
-  
+
   try {
-    const result = compiler.compile(code);
-    currentCompileResult = result;
-    
+    // Parse the code
+    const lexer = new Lexer(code);
+    const tokens = lexer.tokenize();
+    const parser = new Parser(tokens);
+    const ast = parser.parse();
+
+    // Generate JSON instructions
+    const instructions = generator.generate(ast);
+
+    // Infer return type
+    const returnType = typeChecker.inferReturnType(ast);
+    const returnTypeStr = typeChecker.typeToString(returnType);
+
+    // Display the information
     const typeInfoEl = getRequiredEl('typeInfo');
     const compiledCodeEl = getRequiredEl('compiledCode');
     const statusIndicator = getRequiredEl('statusIndicator');
-    
-    if (result.success) {
-      typeInfoEl.className = 'type-info success';
-      typeInfoEl.innerHTML = `
-        <div class="type-info-label">Return Type</div>
-        <div class="type-info-value">${result.returnType}</div>
-      `;
-      compiledCodeEl.textContent = result.code ?? '';
-      statusIndicator.innerHTML = '<span class="status-indicator status-success"></span>';
-    } else {
-      typeInfoEl.className = 'type-info error';
-      typeInfoEl.innerHTML = `
-        <div class="type-info-label">Compilation Error</div>
-        <div class="type-info-value">${result.error}</div>
-      `;
-      compiledCodeEl.textContent = '// Error during compilation';
-      statusIndicator.innerHTML = '<span class="status-indicator status-error"></span>';
-    }
+
+    typeInfoEl.className = 'type-info success';
+    typeInfoEl.innerHTML = `
+      <div class="type-info-label">Return Type</div>
+      <div class="type-info-value">${returnTypeStr}</div>
+      <div class="type-info-label" style="margin-top: 8px;">Instructions Generated</div>
+      <div class="type-info-value">${instructions.length} instructions</div>
+    `;
+    compiledCodeEl.textContent = JSON.stringify(instructions, null, 2);
+    statusIndicator.innerHTML = '<span class="status-indicator status-success"></span>';
+
+    // Store instructions for execution
+    currentInstructions = instructions;
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('Compilation error:', error);
+
+    const typeInfoEl = getRequiredEl('typeInfo');
+    const compiledCodeEl = getRequiredEl('compiledCode');
+    const statusIndicator = getRequiredEl('statusIndicator');
+
+    typeInfoEl.className = 'type-info error';
+    typeInfoEl.innerHTML = `
+      <div class="type-info-label">Compilation Error</div>
+      <div class="type-info-value">${msg}</div>
+    `;
+    compiledCodeEl.textContent = '// Error during compilation';
+    statusIndicator.innerHTML = '<span class="status-indicator status-error"></span>';
+
+    currentInstructions = null;
   }
 }
 
 
 // Run button
 getRequiredEl('runBtn').addEventListener('click', async () => {
-  if (!currentCompileResult || !currentCompileResult.success) {
+  if (!currentInstructions) {
     alert('Fix compilation errors before running');
     return;
   }
-  const compileResult = currentCompileResult as CompileResult;
-  
+
   try {
-    const QuickJS = await load()
+    // Create JSON processor with sample context
+    const processor = new JSONProcessor(sampleContext);
 
-    Scope.withScope((scope) => {
-      const vm = scope.manage(QuickJS.newContext())
+    // Execute the instructions
+    const result = processor.process(currentInstructions);
 
-      // Create JS code to initialize globals from sampleContext
-      const globalsObj = sampleContext;
-      const globalsInit = Object.keys(globalsObj).map(k => `var ${k} = ${JSON.stringify(globalsObj[k])}`).join('\n');
+    const resultEl = getRequiredEl('executionResult');
+    const resultValueEl = getRequiredEl('resultValue');
 
-      const result = scope.manage(
-        vm.unwrapResult(
-          vm.evalCode(`
-            ${globalsInit}
+    resultEl.style.display = 'block';
+    resultValueEl.textContent = JSON.stringify(result, null, 2);
 
-            const floor = Math.floor
-
-            async function main() {
-              ${compileResult.code}
-            }
-
-            main()
-          `)
-        )
-      )
-
-      while (vm.runtime.hasPendingJob()) {
-        vm.runtime.executePendingJobs()
-      }
-
-      // Dump the result; if it's a pending Promise, drive the QuickJS job queue
-      // until the promise settles so we get the resolved value.
-      const returnedValue = vm.dump(result);
-
-      // console.log("vm result:", vm.getNumber(nextId), "native state:", state)
-
-      // When the withScope block exits, it calls scope.dispose(), which in turn calls
-      // the .dispose() methods of all the disposables managed by the scope.
-
-      const resultEl = getRequiredEl('executionResult');
-      const resultValueEl = getRequiredEl('resultValue');
-      
-      resultEl.style.display = 'block';
-      resultValueEl.textContent = JSON.stringify(returnedValue, null, 2);
-      
-      const consoleEl = getRequiredEl('consoleOutput');
-      consoleEl.textContent = `Execution successful!\n\nResult:\n${JSON.stringify(returnedValue, null, 2)}`;
-    })
+    const consoleEl = getRequiredEl('consoleOutput');
+    consoleEl.textContent = `Execution successful!\n\nResult:\n${JSON.stringify(result, null, 2)}`;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     alert('Execution error: ' + msg);
